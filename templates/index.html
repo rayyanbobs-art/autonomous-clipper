@@ -1,0 +1,2915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoShorts AI Studio • Autonomous Clipper & Niche Finder</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Chart.js CDN for Outlier Baseline Distributions -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glow-hover:hover {
+      box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.5);
+    }
+    .tab-sub-btn.active {
+      border-color: #6366f1;
+      color: #ffffff;
+      background: rgba(99, 102, 241, 0.15);
+    }
+    .tab-sub-btn:not(.active) {
+      border-color: transparent;
+      color: #94a3b8;
+    }
+    .tab-sub-btn:not(.active):hover {
+      color: #f8fafc;
+      background: rgba(30, 41, 59, 0.6);
+    }
+    @keyframes pulse-ring {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
+      50% { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0.2); }
+    }
+    .flash-highlight {
+      animation: pulse-ring 1s cubic-bezier(0.4, 0, 0.6, 1) 2;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+
+  <!-- Header & Mode Switcher -->
+  <header class="border-b border-slate-800/80 bg-slate-900/70 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4">
+      
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+          <i data-lucide="zap" class="w-6 h-6 text-white fill-white"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg sm:text-xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-indigo-200 bg-clip-text text-transparent">AutoShorts AI</h1>
+            <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hidden sm:inline-block">Studio Edition</span>
+          </div>
+          <p class="text-xs text-slate-400 font-medium hidden sm:block">Autonomous Clipper & Niche Research Engine</p>
+        </div>
+      </div>
+
+      <!-- Mode Switcher Tabs (Center / Header) -->
+      <div class="flex items-center bg-slate-950/80 border border-slate-800 rounded-xl p-1 shadow-inner">
+        <button
+          id="btnTabClipper"
+          type="button"
+          onclick="switchMainTab('clipper')"
+          class="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+        >
+          <i data-lucide="video" class="w-3.5 h-3.5"></i>
+          <span>Auto-Clipper</span>
+        </button>
+        <button
+          id="btnTabNiche"
+          type="button"
+          onclick="switchMainTab('niche')"
+          class="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white"
+        >
+          <i data-lucide="compass" class="w-3.5 h-3.5 text-sky-400"></i>
+          <span>Niche & Outlier Finder</span>
+          <span class="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 hidden sm:inline-block">Free</span>
+        </button>
+      </div>
+
+      <!-- Header Actions -->
+      <div class="flex items-center gap-2.5">
+        <button
+          type="button"
+          id="btn-open-settings"
+          onclick="openSettingsModal()"
+          class="hidden md:flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition"
+          title="AI Settings"
+        >
+          <i data-lucide="settings" class="w-3.5 h-3.5 text-slate-400"></i>
+          <span>Settings</span>
+        </button>
+        <button
+          type="button"
+          onclick="openOutputFolder()"
+          class="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+        >
+          <i data-lucide="folder" class="w-4 h-4 text-indigo-400"></i>
+          <span class="hidden sm:inline">Saved Clips</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex-1 w-full space-y-10">
+
+    <!-- ========================================================================= -->
+    <!-- VIEW 1: AUTOSHORTS VIDEO CLIPPER STUDIO                                    -->
+    <!-- ========================================================================= -->
+    <div id="viewClipper" class="space-y-10">
+
+      <!-- Hero / Input Form Card -->
+      <section class="glass-card rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+        <!-- Glow effect -->
+        <div class="absolute -top-24 -right-24 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-24 -left-24 w-80 h-80 bg-violet-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="relative z-10 max-w-2xl mx-auto text-center space-y-3 mb-6">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> 100% Free & Autonomous • Critique Gate Active
+          </span>
+          <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Turn Any Long Video Into Viral 9:16 Shorts</h2>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Paste any YouTube video link. System 1 AI instantly detects high-impact viral moments and cuts vertical Shorts with no black bars.
+          </p>
+        </div>
+
+        <form id="generateForm" onsubmit="handleStart(event)" class="relative z-10 max-w-2xl mx-auto space-y-5">
+          <!-- URL Input Header & Niche Finder Link -->
+          <div class="flex items-center justify-between px-1">
+            <span class="text-xs font-semibold text-slate-300">YouTube Video Source:</span>
+            <button
+              type="button"
+              onclick="switchMainTab('niche')"
+              class="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition group"
+            >
+              <i data-lucide="compass" class="w-3.5 h-3.5 text-sky-400 group-hover:rotate-45 transition-transform"></i>
+              <span>Out of ideas? Find trending niche videos &rarr;</span>
+            </button>
+          </div>
+
+          <!-- URL Input Box -->
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="link-2" class="w-5 h-5"></i>
+            </div>
+            <input
+              id="urlInput"
+              type="text"
+              required
+              placeholder="Paste YouTube Link or Video ID (e.g. https://www.youtube.com/watch?v=...)"
+              class="w-full pl-12 pr-28 py-4 bg-slate-900/90 border border-slate-700/80 rounded-xl text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition shadow-inner"
+            />
+            <button
+              type="button"
+              onclick="pasteFromClipboard()"
+              class="absolute inset-y-2 right-2 px-3 flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition border border-slate-700/60"
+            >
+              <i data-lucide="clipboard" class="w-3.5 h-3.5"></i> Paste
+            </button>
+          </div>
+
+          <!-- Controls Row -->
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-1">
+            <div class="flex items-center gap-3 w-full sm:w-auto">
+              <span class="text-xs font-semibold text-slate-300">How many clips:</span>
+              <div class="inline-flex rounded-lg bg-slate-900 border border-slate-800 p-1" id="clipCountGroup">
+                <button type="button" onclick="setClipCount(1)" class="clip-count-btn px-3 py-1 text-xs font-semibold rounded-md transition text-slate-400" data-val="1">1</button>
+                <button type="button" onclick="setClipCount(2)" class="clip-count-btn px-3 py-1 text-xs font-semibold rounded-md transition text-slate-400" data-val="2">2</button>
+                <button type="button" onclick="setClipCount(3)" class="clip-count-btn px-3 py-1 text-xs font-semibold rounded-md transition bg-indigo-600 text-white shadow" data-val="3">3 (Best)</button>
+                <button type="button" onclick="setClipCount(5)" class="clip-count-btn px-3 py-1 text-xs font-semibold rounded-md transition text-slate-400" data-val="5">5</button>
+              </div>
+            </div>
+            
+            <div class="text-xs text-slate-400 flex items-center gap-1.5">
+              <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+              <span>Formatted for Shorts, TikTok & Reels</span>
+            </div>
+          </div>
+
+          <!-- Subtitle Style Row -->
+          <div class="space-y-3 pt-3 border-t border-slate-800/80">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <i data-lucide="type" class="w-4 h-4 text-indigo-400"></i>
+                <span>Subtitle Style:</span>
+              </span>
+              <span id="stylePreviewBadge" class="text-[11px] font-bold px-2 py-0.5 rounded border text-yellow-400 border-yellow-500/30 bg-yellow-500/10">
+                🔥 Bold Pop (Opus Classic)
+              </span>
+            </div>
+
+            <!-- Style Selection Grid -->
+            <div class="grid grid-cols-3 sm:grid-cols-5 gap-2" id="stylePicker">
+              <button type="button" onclick="setSubtitleStyle('bold_pop')" class="style-btn p-2 rounded-xl border border-indigo-500 bg-indigo-600/20 text-white text-left transition flex flex-col items-center justify-center gap-0.5 shadow-lg" data-style="bold_pop">
+                <span class="text-xs font-bold text-yellow-300">🔥 Bold Pop</span>
+                <span class="text-[9px] text-slate-400">Opus Classic</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('karaoke')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="karaoke">
+                <span class="text-xs font-bold text-cyan-400">🎤 Karaoke</span>
+                <span class="text-[9px] text-slate-400">Live Word Fill</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('boxed_clean')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="boxed_clean">
+                <span class="text-xs font-bold text-slate-200">⬛ Boxed</span>
+                <span class="text-[9px] text-slate-400">Dark Badge</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('minimal_caption')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="minimal_caption">
+                <span class="text-xs font-bold text-slate-300">📝 Minimal</span>
+                <span class="text-[9px] text-slate-400">Subtle Caption</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('hormozi')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="hormozi">
+                <span class="text-xs font-bold text-yellow-400">⚡ Hormozi</span>
+                <span class="text-[9px] text-slate-400">Yellow + White</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('beast')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="beast">
+                <span class="text-xs font-bold text-amber-400">🌟 Beast</span>
+                <span class="text-[9px] text-slate-400">Electric Yellow</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('neon_green')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="neon_green">
+                <span class="text-xs font-bold text-emerald-400">🟢 Cyber</span>
+                <span class="text-[9px] text-slate-400">Neon Green</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('red_punch')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="red_punch">
+                <span class="text-xs font-bold text-rose-400">🔴 Punch</span>
+                <span class="text-[9px] text-slate-400">Hot Red</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('clean_white')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="clean_white">
+                <span class="text-xs font-bold text-slate-200">⚪ Clean</span>
+                <span class="text-[9px] text-slate-400">Clean White</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('netflix_standard')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="netflix_standard">
+                <span class="text-xs font-bold text-red-400">🎬 Netflix</span>
+                <span class="text-[9px] text-slate-400">20 CPS Clean</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('bbc_sdh')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="bbc_sdh">
+                <span class="text-xs font-bold text-yellow-300">📺 BBC SDH</span>
+                <span class="text-[9px] text-slate-400">Broadcast Box</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('cinematic_auteur')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="cinematic_auteur">
+                <span class="text-xs font-bold text-amber-300">🎞️ Auteur</span>
+                <span class="text-[9px] text-slate-400">Serif Letterbox</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('kinetic_pop')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="kinetic_pop">
+                <span class="text-xs font-bold text-yellow-300">⚡ Kinetic</span>
+                <span class="text-[9px] text-slate-400">TikTok / Reels</span>
+              </button>
+            </div>
+
+            <!-- Interactive Live Subtitle Sample Box -->
+            <div id="subtitlePreviewBox" class="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800/80 text-center flex items-center justify-center min-h-[52px]">
+              <span id="previewSampleText" class="text-sm sm:text-base font-black tracking-wider uppercase drop-shadow-[0_2px_8px_rgba(0,0,0,1)]">
+                <span class="text-yellow-400 text-lg" style="-webkit-text-stroke: 1.5px black;">NEVER</span> <span class="text-white" style="-webkit-text-stroke: 1.5px black;">GIVE UP</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Critique Gate Status Banner -->
+          <div class="p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-indigo-200">
+            <div class="flex items-center gap-2">
+              <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+              <span><strong>Critique Gate Active:</strong> Threshold 7.0/10 • Auto-iterates up to 4 attempts</span>
+            </div>
+            <span class="text-[11px] text-indigo-400 font-mono">Hook • Clarity • Pacing • Payoff • Share • Subs</span>
+          </div>
+
+          <!-- Opus Pro AI Capabilities Panel -->
+          <div class="p-3.5 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i>
+                <span>Opus Pro AI Features:</span>
+              </span>
+              <span class="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                Pexels API Connected
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <!-- B-Roll Toggle -->
+              <label class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
+                <input type="checkbox" id="brollToggle" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 bg-slate-900 border-slate-700" />
+                <div class="flex flex-col">
+                  <span class="text-xs font-semibold text-white flex items-center gap-1">
+                    <span>🎬 AI Stock B-Roll</span>
+                  </span>
+                  <span class="text-[10px] text-slate-400">Auto-overlays 9:16 vertical clips</span>
+                </div>
+              </label>
+
+              <!-- Auto-Emojis Toggle -->
+              <label class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
+                <input type="checkbox" id="emojiToggle" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 bg-slate-900 border-slate-700" />
+                <div class="flex flex-col">
+                  <span class="text-xs font-semibold text-white flex items-center gap-1">
+                    <span>✨ Auto-Emoji Subtitles</span>
+                  </span>
+                  <span class="text-[10px] text-slate-400">Dynamic keyword emojis (🔥, 💰, 🚀)</span>
+                </div>
+              </label>
+            </div>
+
+            <!-- Framing Mode Selector -->
+            <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+              <span class="text-slate-400 font-medium flex items-center gap-1.5">
+                <i data-lucide="crop" class="w-3.5 h-3.5 text-indigo-400"></i>
+                <span>Framing Mode:</span>
+              </span>
+              <div class="inline-flex rounded-lg bg-slate-950 border border-slate-800 p-0.5" id="framingGroup">
+                <label class="px-2.5 py-1 text-[11px] font-semibold rounded-md cursor-pointer transition text-white bg-indigo-600 shadow" id="labelBlurred">
+                  <input type="radio" name="framingMode" value="blurred" checked class="hidden" onchange="setFramingUI('blurred')" />
+                  ⬛ Blurred Canvas
+                </label>
+                <label class="px-2.5 py-1 text-[11px] font-semibold rounded-md cursor-pointer transition text-slate-400 hover:text-white" id="labelFace">
+                  <input type="radio" name="framingMode" value="smart_face" class="hidden" onchange="setFramingUI('smart_face')" />
+                  🎯 Smart Face
+                </label>
+                <label class="px-2.5 py-1 text-[11px] font-semibold rounded-md cursor-pointer transition text-slate-400 hover:text-white" id="labelSplit">
+                  <input type="radio" name="framingMode" value="split_gaming" class="hidden" onchange="setFramingUI('split_gaming')" />
+                  🎮 Gaming Split
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- High-Octane Speed Editing Suite (IShowSpeed / Fast-Paced Pacing) -->
+          <div class="p-3.5 rounded-xl bg-slate-900/90 border border-amber-500/30 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                <i data-lucide="flame" class="w-4 h-4 text-amber-400"></i>
+                <span>Speed / High-Retention Edit Suite:</span>
+              </span>
+              <span class="text-[10px] font-semibold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                ⚡ IShowSpeed Pacing Mode
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+              <!-- Snappy Jump-Cuts Toggle -->
+              <label class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
+                <input type="checkbox" id="snappyToggle" checked class="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700" />
+                <div class="flex flex-col">
+                  <span class="text-xs font-semibold text-white flex items-center gap-1">
+                    <span>⚡ Snappy Jump-Cuts</span>
+                  </span>
+                  <span class="text-[10px] text-slate-400">Cuts dead air &gt;0.28s</span>
+                </div>
+              </label>
+
+              <!-- Punch-Zooms Toggle -->
+              <label class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
+                <input type="checkbox" id="zoomToggle" checked class="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700" />
+                <div class="flex flex-col">
+                  <span class="text-xs font-semibold text-white flex items-center gap-1">
+                    <span>💥 Energy Punch-Zooms</span>
+                  </span>
+                  <span class="text-[10px] text-slate-400">1.25x vocal reaction zoom</span>
+                </div>
+              </label>
+
+              <!-- Outro Card Toggle -->
+              <label class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
+                <input type="checkbox" id="outroToggle" checked class="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700" />
+                <div class="flex flex-col">
+                  <span class="text-xs font-semibold text-white flex items-center gap-1">
+                    <span>🔴 Subscribe Outro</span>
+                  </span>
+                  <span class="text-[10px] text-slate-400">1s high-contrast card</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Jev AI Intelligence & Safety Suite (Ideas 1, 3, 5) -->
+          <div class="p-3.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                <i data-lucide="shield-alert" class="w-4 h-4 text-emerald-400"></i>
+                <span>Jev AI Superpowers & Safety Suite:</span>
+              </span>
+              <span class="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                ⚡ 10x Parallel Batch VOD Scanner Active
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <!-- Sponsor Killer Toggle -->
+              <label class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
+                <input type="checkbox" id="sponsorKillerToggle" checked class="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-500 bg-slate-900 border-slate-700" />
+                <div class="flex flex-col">
+                  <span class="text-xs font-semibold text-white flex items-center gap-1">
+                    <span>🚫 Sponsor & Promo Killer</span>
+                  </span>
+                  <span class="text-[10px] text-slate-400">Drops brand deals & ad reads (Jev Noul)</span>
+                </div>
+              </label>
+
+              <!-- Smart Auto-Bleeper Toggle -->
+              <label class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
+                <input type="checkbox" id="autoBleepToggle" class="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-500 bg-slate-900 border-slate-700" />
+                <div class="flex flex-col">
+                  <span class="text-xs font-semibold text-white flex items-center gap-1">
+                    <span>🤬 Profanity Auto-Bleeper</span>
+                  </span>
+                  <span class="text-[10px] text-slate-400">1000Hz bleep & subtitle masking</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Action Button -->
+          <button
+            type="submit"
+            id="submitBtn"
+            class="w-full py-4 px-6 rounded-xl font-bold text-base text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-xl shadow-indigo-600/30 glow-hover transition duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <i data-lucide="wand-2" class="w-5 h-5"></i>
+            <span>Generate Viral Shorts Now</span>
+          </button>
+        </form>
+      </section>
+
+      <!-- Live Progress Section (hidden by default) -->
+      <section id="progressSection" class="hidden glass-card rounded-2xl p-6 sm:p-8 space-y-4 border-indigo-500/30">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="relative flex h-3 w-3">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
+            </div>
+            <span id="progressStep" class="text-sm font-semibold text-slate-200">Initializing...</span>
+          </div>
+          <span id="progressPercent" class="text-sm font-bold text-indigo-400">0%</span>
+        </div>
+
+        <!-- Animated Progress Bar -->
+        <div class="w-full h-3 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
+          <div id="progressBar" class="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-300 w-0"></div>
+        </div>
+        <p class="text-xs text-slate-500 text-center">Processing directly on your machine. You can keep this page open or explore niches below!</p>
+      </section>
+
+      <!-- Error Alert (hidden by default) -->
+      <div id="errorAlert" class="hidden rounded-xl p-4 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-sm flex items-start gap-3">
+        <i data-lucide="alert-circle" class="w-5 h-5 shrink-0 mt-0.5"></i>
+        <div class="space-y-1">
+          <p class="font-semibold text-rose-300">Generation Failed</p>
+          <p id="errorMessage" class="text-xs text-rose-400"></p>
+        </div>
+      </div>
+
+      <!-- Output Gallery -->
+      <section class="space-y-6">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div>
+            <h3 class="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+              <i data-lucide="film" class="w-5 h-5 text-indigo-400"></i>
+              <span>Your Generated Shorts</span>
+            </h3>
+            <p class="text-xs text-slate-400">All clips rendered in 1080x1920 (9:16) with titles & tags ready to post.</p>
+          </div>
+          <span id="clipCountBadge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">0 clips</span>
+        </div>
+
+        <!-- Clips Grid -->
+        <div id="clipsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <!-- Clip cards injected via JS -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="hidden text-center py-16 px-4 space-y-3">
+          <div class="inline-flex p-4 rounded-full bg-slate-900 border border-slate-800 text-slate-600 mb-2">
+            <i data-lucide="video-off" class="w-8 h-8"></i>
+          </div>
+          <h4 class="text-base font-semibold text-slate-300">No clips yet</h4>
+          <p class="text-xs text-slate-500 max-w-sm mx-auto">Paste any YouTube URL above or click "Niche & Outlier Finder" to find trending high-view videos to clip.</p>
+        </div>
+      </section>
+
+    </div>
+
+
+    <!-- ========================================================================= -->
+    <!-- VIEW 2: TUBEGEN NICHE & COMPETITOR RESEARCH STUDIO                         -->
+    <!-- ========================================================================= -->
+    <div id="viewNicheFinder" class="hidden space-y-8">
+
+      <!-- Niche Finder Header Banner -->
+      <div class="glass-card rounded-2xl p-6 border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="p-2 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
+              <i data-lucide="compass" class="w-5 h-5"></i>
+            </span>
+            <h2 class="text-xl font-extrabold text-white">Niche & Outlier Research Studio</h2>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">Discover high-performing channels, calculate outlier view spikes, and send viral videos directly to the clipper.</p>
+        </div>
+
+        <!-- Subtabs Navigation -->
+        <div class="flex flex-wrap gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+          <button type="button" class="tab-sub-btn active px-3 py-1.5 rounded-lg text-xs font-semibold transition" data-subtab="subtab-niche" onclick="switchNicheSubTab('subtab-niche')">
+            <i data-lucide="search" class="w-3.5 h-3.5 inline mr-1 text-sky-400"></i> Niche Explorer
+          </button>
+          <button type="button" class="tab-sub-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition" data-subtab="subtab-channel" onclick="switchNicheSubTab('subtab-channel')">
+            <i data-lucide="target" class="w-3.5 h-3.5 inline mr-1 text-amber-400"></i> Outlier Deep-Dive
+          </button>
+          <button type="button" class="tab-sub-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition" data-subtab="subtab-hook" onclick="switchNicheSubTab('subtab-hook')">
+            <i data-lucide="scissors" class="w-3.5 h-3.5 inline mr-1 text-emerald-400"></i> Hook Deconstructor
+          </button>
+          <button type="button" class="tab-sub-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition" data-subtab="subtab-ideas" onclick="switchNicheSubTab('subtab-ideas')">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5 inline mr-1 text-purple-400"></i> Topic Cloner
+          </button>
+        </div>
+      </div>
+
+      <!-- SUBTAB 1: NICHE EXPLORER -->
+      <section id="subtab-niche" class="niche-subtab-content block space-y-6">
+        <div class="glass-card p-6 rounded-2xl border-slate-800 shadow-xl">
+          <h3 class="text-base font-bold text-white mb-1 flex items-center gap-2">
+            <i data-lucide="search" class="w-4 h-4 text-sky-400"></i>
+            Search Profitable Niches & Uncover Channels
+          </h3>
+          <p class="text-xs text-slate-400 mb-4">Enter any niche keyword to discover active channels, view counts, and sample content.</p>
+
+          <form id="form-search-niche" onsubmit="return false;" class="flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+              <input
+                type="text"
+                id="niche-query"
+                required
+                placeholder="e.g. Ancient History, Stoicism, Dark Psychology, Mini Documentary, Wealth Lessons"
+                class="w-full bg-slate-900 border border-slate-700/80 rounded-xl pl-10 pr-4 py-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 transition"
+              />
+            </div>
+            <button
+              type="submit"
+              id="btn-search-niche"
+              class="px-5 py-3 bg-sky-600 hover:bg-sky-500 font-bold text-xs sm:text-sm text-white rounded-xl shadow-lg shadow-sky-600/25 transition flex items-center justify-center gap-2"
+            >
+              <span>Discover Channels</span>
+              <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </button>
+          </form>
+
+          <!-- Quick Topic Chips -->
+          <div class="flex items-center gap-2 mt-4 flex-wrap text-xs text-slate-400">
+            <span class="font-medium text-slate-500">Popular Niches:</span>
+            <button type="button" class="niche-chip px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition text-[11px]">Ancient Civilizations</button>
+            <button type="button" class="niche-chip px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition text-[11px]">Stoic Philosophy</button>
+            <button type="button" class="niche-chip px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition text-[11px]">Dark Psychology</button>
+            <button type="button" class="niche-chip px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition text-[11px]">Unexplained Mysteries</button>
+            <button type="button" class="niche-chip px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition text-[11px]">Finance Documentaries</button>
+          </div>
+        </div>
+
+        <!-- Niche Results Container -->
+        <div id="niche-results-container" class="hidden space-y-4">
+          <div class="flex items-center justify-between">
+            <h4 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>Discovered Channels</span>
+              <span id="niche-count-badge" class="px-2 py-0.5 text-xs rounded-full bg-sky-500/20 text-sky-300">0 channels</span>
+            </h4>
+            <span class="text-xs text-slate-400">Click "Analyze Outliers" or "Clip Video"</span>
+          </div>
+          <div id="niche-channels-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="niche-loading" class="hidden py-14 text-center space-y-3">
+          <div class="inline-block w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-xs text-slate-400 font-medium">Scraping YouTube niche ecosystem without API keys...</p>
+        </div>
+      </section>
+
+      <!-- SUBTAB 2: CHANNEL OUTLIER DEEP-DIVE -->
+      <section id="subtab-channel" class="niche-subtab-content hidden space-y-6">
+        <div class="glass-card p-6 rounded-2xl border-slate-800 shadow-xl">
+          <h3 class="text-base font-bold text-white mb-1 flex items-center gap-2">
+            <i data-lucide="target" class="w-4 h-4 text-amber-400"></i>
+            Channel Outlier Detector & Viral Spikes
+          </h3>
+          <p class="text-xs text-slate-400 mb-4">Enter any channel handle or URL to calculate median baseline views and spot breakout videos ($2\times-5\times$ performance).</p>
+
+          <form id="form-channel-deepdive" onsubmit="return false;" class="flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <i data-lucide="at-sign" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+              <input
+                type="text"
+                id="channel-input"
+                required
+                placeholder="e.g. @AncientPpl, @veritasium, Alex Hormozi, or full channel URL"
+                class="w-full bg-slate-900 border border-slate-700/80 rounded-xl pl-10 pr-4 py-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
+              />
+            </div>
+            <button
+              type="submit"
+              id="btn-deepdive"
+              class="px-5 py-3 bg-amber-600 hover:bg-amber-500 font-bold text-xs sm:text-sm text-white rounded-xl shadow-lg shadow-amber-600/25 transition flex items-center justify-center gap-2"
+            >
+              <span>Analyze Channel</span>
+              <i data-lucide="zap" class="w-4 h-4"></i>
+            </button>
+          </form>
+        </div>
+
+        <!-- Channel Metrics & Outliers Display -->
+        <div id="channel-results-container" class="hidden space-y-6">
+          <!-- Channel Header Card -->
+          <div class="glass-card rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 border-slate-800">
+            <div class="flex items-center gap-3.5">
+              <div id="ch-avatar-wrap" class="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-lg font-bold text-white overflow-hidden shrink-0">
+                <i data-lucide="user" class="w-6 h-6 text-slate-500"></i>
+              </div>
+              <div>
+                <h4 id="ch-title" class="text-base font-extrabold text-white">Channel Name</h4>
+                <p id="ch-sub-url" class="text-[11px] text-slate-400 mt-0.5 truncate max-w-sm">https://youtube.com/...</p>
+              </div>
+            </div>
+
+            <!-- Stats Badges -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full md:w-auto">
+              <div class="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-center">
+                <span class="text-[10px] uppercase font-bold text-slate-500">Subscribers</span>
+                <p id="stat-subs" class="text-sm font-extrabold text-white mt-0.5">0</p>
+              </div>
+              <div class="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-center">
+                <span class="text-[10px] uppercase font-bold text-slate-500">Median Baseline</span>
+                <p id="stat-median" class="text-sm font-extrabold text-emerald-400 mt-0.5">0</p>
+              </div>
+              <div class="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-center">
+                <span class="text-[10px] uppercase font-bold text-slate-500">Max Views</span>
+                <p id="stat-max" class="text-sm font-extrabold text-amber-400 mt-0.5">0</p>
+              </div>
+              <div class="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-center">
+                <span class="text-[10px] uppercase font-bold text-slate-500">Outlier Hits</span>
+                <p id="stat-outliers" class="text-sm font-extrabold text-indigo-400 mt-0.5">0</p>
+                <span id="stat-outliers-sub" class="text-[10px] text-slate-400 block mt-0.5">Top: 1.0x</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Interactive View Distribution Chart -->
+          <div class="glass-card rounded-2xl p-5 border-slate-800 shadow-xl space-y-4">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <h4 class="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                  <i data-lucide="bar-chart-2" class="w-4 h-4 text-emerald-400"></i>
+                  <span>Recent Upload View Distribution & Outlier Spikes</span>
+                </h4>
+                <p class="text-[11px] text-slate-400 mt-0.5">Inspect view performance relative to channel median baseline</p>
+              </div>
+
+              <!-- Custom Legend & Chart Mode Toggle -->
+              <div class="flex items-center gap-2.5 flex-wrap">
+                <div class="flex items-center gap-3.5 text-xs bg-slate-950/80 px-3 py-1.5 rounded-xl border border-slate-800">
+                  <span class="flex items-center gap-1.5 text-slate-300">
+                    <span class="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block"></span>
+                    <span class="text-[11px] font-medium">Views</span>
+                  </span>
+                  <span class="flex items-center gap-1.5 text-slate-300">
+                    <span class="w-4 h-0 border-t-2 border-dashed border-sky-400 inline-block"></span>
+                    <span class="text-[11px] font-medium">Baseline: <strong id="chart-legend-median" class="text-sky-300">0</strong></span>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  id="btn-toggle-chart-order"
+                  onclick="toggleChartSortMode()"
+                  class="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 rounded-xl text-[11px] font-semibold transition flex items-center gap-1.5"
+                >
+                  <i data-lucide="arrow-down-up" class="w-3 h-3 text-indigo-400"></i>
+                  <span id="chart-order-label">Sort: High to Low</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="h-64 w-full relative">
+              <canvas id="channel-views-chart"></canvas>
+            </div>
+          </div>
+
+          <!-- Outlier Table with Interactive High-to-Low Sorting -->
+          <div class="glass-card rounded-2xl overflow-hidden border-slate-800 shadow-xl">
+            <div class="px-5 py-4 border-b border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+              <div>
+                <h4 class="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                  <i data-lucide="flame" class="w-4 h-4 text-rose-400"></i>
+                  <span id="table-heading-title">Videos Ranked by Outlier Multiplier</span>
+                </h4>
+                <p class="text-[11px] text-slate-400 mt-0.5">Click any column header or sort button to order high-to-low / low-to-high</p>
+              </div>
+
+              <!-- Quick Sort Buttons -->
+              <div class="flex items-center gap-1.5 flex-wrap text-xs">
+                <button type="button" onclick="applySort('outlier_multiplier', 'desc')" class="sort-chip active px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-semibold text-[11px] transition shadow" data-sort="outlier_multiplier">
+                  🔥 Outlier Score (High &rarr; Low)
+                </button>
+                <button type="button" onclick="applySort('views', 'desc')" class="sort-chip px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-semibold text-[11px] transition" data-sort="views">
+                  👁️ Views (High &rarr; Low)
+                </button>
+                <button type="button" onclick="applySort('duration_seconds', 'desc')" class="sort-chip px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-semibold text-[11px] transition" data-sort="duration_seconds">
+                  ⏱️ Duration
+                </button>
+                <button type="button" onclick="applySort('upload_date', 'desc')" class="sort-chip px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-semibold text-[11px] transition" data-sort="upload_date">
+                  📅 Uploaded
+                </button>
+              </div>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-900 text-[10px] uppercase font-bold tracking-wider text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th class="py-3 px-4">Video</th>
+                    <th class="py-3 px-4 cursor-pointer hover:text-white transition select-none" onclick="toggleColumnSort('upload_date')" title="Click to sort by upload date">
+                      <div class="flex items-center gap-1">
+                        <span>Uploaded</span>
+                        <span id="sort-icon-upload_date" class="text-slate-600">↕</span>
+                      </div>
+                    </th>
+                    <th class="py-3 px-4 cursor-pointer hover:text-white transition select-none" onclick="toggleColumnSort('duration_seconds')" title="Click to sort by duration">
+                      <div class="flex items-center gap-1">
+                        <span>Duration</span>
+                        <span id="sort-icon-duration_seconds" class="text-slate-600">↕</span>
+                      </div>
+                    </th>
+                    <th class="py-3 px-4 cursor-pointer hover:text-white transition select-none" onclick="toggleColumnSort('views')" title="Click to sort by views">
+                      <div class="flex items-center gap-1">
+                        <span>Views</span>
+                        <span id="sort-icon-views" class="text-slate-600">↕</span>
+                      </div>
+                    </th>
+                    <th class="py-3 px-4 cursor-pointer hover:text-white transition select-none" onclick="toggleColumnSort('outlier_multiplier')" title="Click to sort by outlier score">
+                      <div class="flex items-center gap-1 text-indigo-400">
+                        <span>Outlier Score</span>
+                        <span id="sort-icon-outlier_multiplier">▼</span>
+                      </div>
+                    </th>
+                    <th class="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="channel-videos-tbody" class="divide-y divide-slate-800/80">
+                  <!-- Populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="channel-loading" class="hidden py-14 text-center space-y-3">
+          <div class="inline-block w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-xs text-slate-400 font-medium">Calculating median view distribution and identifying outliers...</p>
+        </div>
+      </section>
+
+      <!-- SUBTAB 3: HOOK & TRANSCRIPT DECONSTRUCTOR -->
+      <section id="subtab-hook" class="niche-subtab-content hidden space-y-6">
+        <div class="glass-card p-6 rounded-2xl border-slate-800 shadow-xl">
+          <h3 class="text-base font-bold text-white mb-1 flex items-center gap-2">
+            <i data-lucide="scissors" class="w-4 h-4 text-emerald-400"></i>
+            Hook & Transcript Deconstructor
+          </h3>
+          <p class="text-xs text-slate-400 mb-4">Analyze the critical 0–60 second opening hook of any video. Deconstruct words per minute (WPM), speech pacing, and psychological retention frameworks.</p>
+
+          <form id="form-hook-analyze" onsubmit="return false;" class="flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <i data-lucide="play-circle" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+              <input
+                type="text"
+                id="video-input"
+                required
+                placeholder="e.g. YouTube Video URL or Video ID (e.g. ha1NneZGm7A)"
+                class="w-full bg-slate-900 border border-slate-700/80 rounded-xl pl-10 pr-4 py-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
+              />
+            </div>
+            <button
+              type="submit"
+              id="btn-analyze-video"
+              class="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 font-bold text-xs sm:text-sm text-white rounded-xl shadow-lg shadow-emerald-600/25 transition flex items-center justify-center gap-2"
+            >
+              <span>Deconstruct Hook</span>
+              <i data-lucide="scan" class="w-4 h-4"></i>
+            </button>
+          </form>
+        </div>
+
+        <!-- Hook Analysis Display -->
+        <div id="hook-results-container" class="hidden space-y-6">
+          <!-- Hook Pacing Metrics -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="glass-card p-4 rounded-xl border-slate-800">
+              <span class="text-[10px] uppercase font-bold text-slate-500">Hook Speech Pacing</span>
+              <p id="hook-stat-wpm" class="text-xl font-extrabold text-white mt-1">150 <span class="text-xs font-normal text-slate-400">WPM</span></p>
+              <span id="hook-stat-pacing-rating" class="inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold">Fast Paced</span>
+            </div>
+            <div class="glass-card p-4 rounded-xl border-slate-800">
+              <span class="text-[10px] uppercase font-bold text-slate-500">Hook Window</span>
+              <p id="hook-stat-duration" class="text-xl font-extrabold text-emerald-400 mt-1">54 <span class="text-xs font-normal text-slate-400">sec</span></p>
+              <p class="text-[10px] text-slate-400 mt-1.5">Optimal: 45 - 60s</p>
+            </div>
+            <div class="glass-card p-4 rounded-xl border-slate-800">
+              <span class="text-[10px] uppercase font-bold text-slate-500">Sentence Density</span>
+              <p id="hook-stat-density" class="text-xl font-extrabold text-amber-400 mt-1">11.4 <span class="text-xs font-normal text-slate-400">w/sent</span></p>
+              <span id="hook-stat-readability" class="inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold">Conversational</span>
+            </div>
+            <div class="glass-card p-4 rounded-xl border-slate-800">
+              <span class="text-[10px] uppercase font-bold text-slate-500">Total Words</span>
+              <p id="hook-stat-total-words" class="text-xl font-extrabold text-purple-400 mt-1">2,410</p>
+              <p id="hook-stat-runtime" class="text-[10px] text-slate-400 mt-1.5">~16 min runtime</p>
+            </div>
+          </div>
+
+          <!-- Detected Psychological Triggers -->
+          <div class="glass-card rounded-2xl p-4 border-slate-800">
+            <h4 class="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-2.5">Detected Psychological Hook Triggers</h4>
+            <div id="hook-frameworks-list" class="flex flex-wrap gap-2">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <!-- Opening Hook Script -->
+          <div class="glass-card rounded-2xl p-5 border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
+                The Opening 60-Second Hook Script
+              </h4>
+              <div class="flex items-center gap-2">
+                <button type="button" id="btn-clip-hook-video" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition">
+                  <i data-lucide="zap" class="w-3.5 h-3.5 text-yellow-300"></i>
+                  <span>⚡ Send to Clipper</span>
+                </button>
+                <button type="button" id="btn-copy-hook" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-slate-300 flex items-center gap-1.5 transition">
+                  <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                  <span>Copy Hook</span>
+                </button>
+              </div>
+            </div>
+            <div id="hook-script-box" class="p-4 bg-slate-950 rounded-xl border border-slate-800/80 text-xs text-slate-200 leading-relaxed font-mono whitespace-pre-wrap max-h-52 overflow-y-auto">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <!-- Full Timestamped Transcript -->
+          <div class="glass-card rounded-2xl p-5 border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <h4 class="font-bold text-white text-xs sm:text-sm">Full Timestamped Transcript</h4>
+              <button type="button" id="btn-copy-full-transcript" class="text-xs text-slate-400 hover:text-white flex items-center gap-1">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                Copy Full Transcript
+              </button>
+            </div>
+            <div id="transcript-snippets-container" class="space-y-1.5 max-h-64 overflow-y-auto p-3 bg-slate-950 rounded-xl border border-slate-800/80 text-xs">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="hook-loading" class="hidden py-14 text-center space-y-3">
+          <div class="inline-block w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-xs text-slate-400 font-medium">Extracting transcript and isolating opening hook window...</p>
+        </div>
+      </section>
+
+      <!-- SUBTAB 4: VIRAL TOPIC & STYLE CLONER -->
+      <section id="subtab-ideas" class="niche-subtab-content hidden space-y-6">
+        <div class="glass-card p-6 rounded-2xl border-slate-800 shadow-xl">
+          <h3 class="text-base font-bold text-white mb-1 flex items-center gap-2">
+            <i data-lucide="sparkles" class="w-4 h-4 text-purple-400"></i>
+            Viral Topic & Style Cloner
+          </h3>
+          <p class="text-xs text-slate-400 mb-4">Synthesize winning syntactic formulas from outlier titles into 8 fresh video blueprints (Title, Thumbnail Blueprint, 45s Hook Script, Strategic Rationale).</p>
+
+          <form id="form-generate-ideas" onsubmit="return false;" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-1">Target Niche or Sub-Topic</label>
+                <input
+                  type="text"
+                  id="gen-niche"
+                  required
+                  placeholder="e.g. Ancient Roman Secrets, Stoic Discipline, True Crime"
+                  class="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-1">Channel Name Being Modeled (Optional)</label>
+                <input
+                  type="text"
+                  id="gen-channel-name"
+                  placeholder="e.g. Ancient Peoples"
+                  class="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                />
+              </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
+              <span class="text-[11px] text-slate-400">Uses built-in heuristic pattern synthesis ($0 cost, 100% offline, zero keys needed)</span>
+              <button
+                type="submit"
+                id="btn-generate-ideas"
+                class="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 font-bold text-xs sm:text-sm text-white rounded-xl shadow-lg shadow-purple-600/25 transition flex items-center gap-2"
+              >
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                <span>Generate 8 Viral Concepts</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Generated Concepts Grid -->
+        <div id="ideas-results-container" class="hidden space-y-4">
+          <div class="flex items-center justify-between">
+            <h4 class="text-sm font-bold text-white">Generated Video Blueprints</h4>
+            <span class="text-xs text-slate-400">Modeled directly on proven high-retention frameworks</span>
+          </div>
+          <div id="ideas-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="ideas-loading" class="hidden py-14 text-center space-y-3">
+          <div class="inline-block w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-xs text-slate-400 font-medium">Synthesizing winning title formulas and retention scripts...</p>
+        </div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- Settings Modal (AI + Social Auto-Upload) -->
+  <div id="modal-settings" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="settings" class="w-5 h-5 text-indigo-400"></i>
+          Studio Settings
+        </h3>
+        <button type="button" onclick="closeSettingsModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <!-- Settings Navigation Tabs -->
+      <div class="flex items-center gap-2 border-b border-slate-800 pb-2">
+        <button type="button" id="tab-btn-social" onclick="switchSettingsTab('social')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition bg-indigo-600 text-white flex items-center gap-1.5">
+          <i data-lucide="share-2" class="w-3.5 h-3.5"></i> Social Accounts & Upload
+        </button>
+        <button type="button" id="tab-btn-ai" onclick="switchSettingsTab('ai')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white flex items-center gap-1.5">
+          <i data-lucide="cpu" class="w-3.5 h-3.5"></i> AI Engines
+        </button>
+      </div>
+
+      <!-- TAB 1: SOCIAL ACCOUNTS & AUTO-UPLOAD -->
+      <div id="settings-tab-social" class="space-y-4">
+        <!-- YouTube Data API v3 -->
+        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-white flex items-center gap-2">
+              <i data-lucide="youtube" class="w-4 h-4 text-red-500"></i>
+              YouTube Data API v3 (Direct Shorts Upload)
+            </span>
+            <span id="yt-status-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">Checking...</span>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            Free official upload directly to your channel using OAuth2. Ensure <code class="text-indigo-400">client_secrets.json</code> is located in your clipper folder.
+          </p>
+          <div id="yt-connect-container" class="pt-1 flex items-center gap-2">
+            <button type="button" onclick="startYouTubeOAuth()" class="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
+              <i data-lucide="log-in" class="w-3.5 h-3.5"></i> Connect Channel
+            </button>
+          </div>
+        </div>
+
+        <!-- Ayrshare (TikTok & Instagram Reels) -->
+        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-white flex items-center gap-2">
+              <i data-lucide="layers" class="w-4 h-4 text-violet-400"></i>
+              Multi-Platform Social API (TikTok & Instagram)
+            </span>
+            <span id="ayr-status-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">Checking...</span>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            One API key to post video reels and shorts simultaneously to TikTok and Instagram.
+          </p>
+          <div class="space-y-1">
+            <input type="password" id="input-ayrshare-key" placeholder="Enter Ayrshare API Key..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+
+        <!-- Automation Settings -->
+        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+          <span class="text-xs font-bold text-white flex items-center gap-2">
+            <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i>
+            Autonomous Auto-Publishing
+          </span>
+          <label class="flex items-center gap-2.5 cursor-pointer">
+            <input type="checkbox" id="chk-auto-upload-enabled" class="rounded text-indigo-600 focus:ring-0">
+            <span class="text-xs text-slate-200 font-semibold">Automatically upload clips upon rendering completion</span>
+          </label>
+          <div class="grid grid-cols-2 gap-3 pt-1">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 mb-1">Default Privacy</label>
+              <select id="select-default-privacy" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                <option value="public">Public</option>
+                <option value="unlisted">Unlisted</option>
+                <option value="private">Private (Draft)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 mb-1">Target Platforms</label>
+              <div class="flex items-center gap-2 pt-1 text-xs">
+                <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="chk-auto-yt" checked> YT</label>
+                <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="chk-auto-tt" checked> TikTok</label>
+                <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="chk-auto-ig" checked> IG</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: AI ENGINES -->
+      <div id="settings-tab-ai" class="space-y-4 hidden">
+        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+          <span class="text-xs font-bold text-white flex items-center gap-2">
+            <i data-lucide="cpu" class="w-4 h-4 text-indigo-400"></i>
+            Jev System One Engine
+          </span>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Active via local configuration. Used for calibrated System 1 virality scoring, instant content categorization, and ranking the highest CTR title hooks.
+          </p>
+          <span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">✓ Active</span>
+        </div>
+
+        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+          <label class="block text-xs font-semibold text-slate-300">Google Gemini API Key (Optional)</label>
+          <input type="password" id="input-gemini-key" placeholder="AIzaSy..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+          <p class="text-[10px] text-slate-500">Stored safely in your browser localStorage for optional personalized idea blueprints.</p>
+        </div>
+      </div>
+
+      <div class="pt-2 flex justify-end gap-2 border-t border-slate-800">
+        <button type="button" onclick="closeSettingsModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 rounded-lg transition">Cancel</button>
+        <button type="button" onclick="saveSettingsModal()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white rounded-lg shadow-lg shadow-indigo-600/30 transition">Save All Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upload to Socials Modal -->
+  <div id="modal-upload" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="share-2" class="w-5 h-5 text-indigo-400"></i>
+          Publish Clip to Social Media
+        </h3>
+        <button type="button" onclick="closeUploadModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <!-- Target Clip Info -->
+      <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-indigo-600/20 flex items-center justify-center text-indigo-400">
+          <i data-lucide="video" class="w-5 h-5"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p id="upload-clip-filename" class="text-xs font-mono font-bold text-slate-200 truncate">clip.mp4</p>
+          <p id="upload-clip-niche" class="text-[10px] text-indigo-400 font-semibold uppercase tracking-wider">Tech / AI</p>
+        </div>
+      </div>
+
+      <!-- Not Connected Notice Banner -->
+      <div id="upload-not-connected-banner" class="hidden p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400 shrink-0"></i>
+          <span>No accounts connected yet. Link your YouTube or Ayrshare key in Settings.</span>
+        </div>
+        <button type="button" onclick="closeUploadModal(); openSettingsModal();" class="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 rounded-lg text-[10px] font-bold shrink-0 transition flex items-center gap-1">
+          <i data-lucide="settings" class="w-3 h-3"></i> Open Settings
+        </button>
+      </div>
+
+      <!-- Title & Hook Selector -->
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-semibold text-slate-300">Video Title (Viral Hook)</label>
+          <span id="title-char-count" class="text-[10px] text-slate-400 font-mono">0/100</span>
+        </div>
+        <input type="text" id="upload-title-input" oninput="updateCharCount()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium">
+        
+        <!-- Jev Candidate Hooks Dropdown / Chips -->
+        <div id="upload-candidates-container" class="space-y-1 pt-1 hidden">
+          <p class="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
+            <i data-lucide="sparkles" class="w-3 h-3 text-amber-400"></i> Alternative Hooks Scored by Jev:
+          </p>
+          <div id="upload-candidate-chips" class="flex flex-col gap-1.5 max-h-32 overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+
+      <!-- Description & Hashtags -->
+      <div class="space-y-1.5">
+        <label class="text-xs font-semibold text-slate-300">Description & Hashtags</label>
+        <textarea id="upload-desc-input" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"></textarea>
+      </div>
+
+      <!-- Target Platforms -->
+      <div class="space-y-2">
+        <label class="text-xs font-semibold text-slate-300">Select Target Platforms</label>
+        <div class="grid grid-cols-3 gap-2">
+          <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-800 bg-slate-950/80 cursor-pointer hover:border-slate-700 transition">
+            <input type="checkbox" id="chk-platform-yt" checked class="rounded text-indigo-600 focus:ring-0">
+            <span class="text-xs font-semibold text-red-400 flex items-center gap-1"><i data-lucide="youtube" class="w-3.5 h-3.5"></i> YouTube</span>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-800 bg-slate-950/80 cursor-pointer hover:border-slate-700 transition">
+            <input type="checkbox" id="chk-platform-tt" checked class="rounded text-indigo-600 focus:ring-0">
+            <span class="text-xs font-semibold text-cyan-400 flex items-center gap-1"><i data-lucide="music-2" class="w-3.5 h-3.5"></i> TikTok</span>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-800 bg-slate-950/80 cursor-pointer hover:border-slate-700 transition">
+            <input type="checkbox" id="chk-platform-ig" checked class="rounded text-indigo-600 focus:ring-0">
+            <span class="text-xs font-semibold text-pink-400 flex items-center gap-1"><i data-lucide="instagram" class="w-3.5 h-3.5"></i> Instagram</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- YouTube Privacy -->
+      <div class="flex items-center justify-between pt-1">
+        <label class="text-xs font-semibold text-slate-300">YouTube Visibility</label>
+        <select id="upload-privacy-select" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none">
+          <option value="public" selected>Public (Instant)</option>
+          <option value="unlisted">Unlisted</option>
+          <option value="private">Private (Draft)</option>
+        </select>
+      </div>
+
+      <!-- Feedback / Result Area -->
+      <div id="upload-status-area" class="hidden p-3 rounded-xl text-xs space-y-1"></div>
+
+      <!-- Action Buttons -->
+      <div class="pt-3 flex justify-end gap-2 border-t border-slate-800">
+        <button type="button" onclick="closeUploadModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 rounded-lg transition">Cancel</button>
+        <button type="button" id="btn-submit-upload" onclick="executeUploadFromModal()" class="flex items-center gap-1.5 px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white rounded-lg shadow-lg shadow-indigo-600/30 transition">
+          <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+          <span>Upload Now</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none flex items-center gap-2 px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-semibold shadow-2xl">
+    <i data-lucide="check" class="w-4 h-4"></i>
+    <span id="toastMsg">Action completed!</span>
+  </div>
+
+  <footer class="mt-auto border-t border-slate-800/80 bg-slate-950 py-4 px-6 text-center text-xs text-slate-500">
+    AutoShorts AI Studio • Autonomous Video Clipper & Niche Research • Running Locally on Your Machine
+  </footer>
+
+  <!-- ========================================================================= -->
+  <!-- JAVASCRIPT CONTROLLER                                                     -->
+  <!-- ========================================================================= -->
+  <script>
+    // --- STATE MANAGEMENT ---
+    let currentMainTab = 'clipper';
+    let selectedClipCount = 3;
+    let selectedStyle = 'bold_pop';
+    let activeJobId = null;
+    let pollInterval = null;
+
+    // Niche Finder State
+    let activeChannelData = null;
+    let activeOutlierTitles = [];
+    let viewsChartInstance = null;
+    let currentActiveVideoId = "";
+    let currentHookText = "";
+    let currentFullTranscript = "";
+
+    // Subtitle Previews
+    const STYLE_PREVIEWS = {
+      bold_pop: {
+        badge: '🔥 Bold Pop (Opus Classic)',
+        badgeClass: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10',
+        html: '<span class="text-yellow-400 text-lg font-black tracking-wide" style="-webkit-text-stroke: 1.5px black;">NEVER</span> <span class="text-white font-black tracking-wide" style="-webkit-text-stroke: 1.5px black;">GIVE UP</span>'
+      },
+      karaoke: {
+        badge: '🎤 Karaoke (Live Fill)',
+        badgeClass: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
+        html: '<span class="text-cyan-300 font-black tracking-wide" style="-webkit-text-stroke: 1.5px black;">REAL-TIME</span> <span class="text-white font-black tracking-wide" style="-webkit-text-stroke: 1.5px black;">VOICE TRACK</span>'
+      },
+      boxed_clean: {
+        badge: '⬛ Boxed Clean (Dark Badge)',
+        badgeClass: 'text-slate-200 border-slate-600/40 bg-slate-800/40',
+        html: '<span class="bg-black/90 px-2 py-0.5 rounded text-white font-bold tracking-wide border border-white/20"><span class="text-yellow-400">BADGE</span> CAPTION</span>'
+      },
+      minimal_caption: {
+        badge: '📝 Minimal Caption (Subtle)',
+        badgeClass: 'text-slate-300 border-slate-500/30 bg-slate-500/10',
+        html: '<span class="text-slate-200 font-semibold tracking-wide" style="-webkit-text-stroke: 0.8px black;">Subtle documentary caption</span>'
+      },
+      hormozi: {
+        badge: '⚡ Hormozi (Yellow & White)',
+        badgeClass: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10',
+        html: '<span class="text-yellow-400 font-black tracking-wide" style="-webkit-text-stroke: 1.5px black;">LIKE THAT</span> <span class="text-white font-black tracking-wide" style="-webkit-text-stroke: 1.5px black;">SHOULD BE</span>'
+      },
+      beast: {
+        badge: '🌟 Beast (Electric Yellow)',
+        badgeClass: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+        html: '<span class="text-amber-300 font-black tracking-wide" style="-webkit-text-stroke: 2px black;">THIS IS INCREDIBLE</span>'
+      },
+      neon_green: {
+        badge: '🟢 Cyber (Neon Green)',
+        badgeClass: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+        html: '<span class="text-emerald-400 font-black tracking-wide" style="-webkit-text-stroke: 1.5px black;">AI DECISION</span> <span class="text-white font-black tracking-wide" style="-webkit-text-stroke: 1.5px black;">ENGINE</span>'
+      },
+      red_punch: {
+        badge: '🔴 Punch (Hot Red)',
+        badgeClass: 'text-rose-400 border-rose-500/30 bg-rose-500/10',
+        html: '<span class="text-rose-500 font-black tracking-wide" style="-webkit-text-stroke: 1.5px black;">DO NOT</span> <span class="text-white font-black tracking-wide" style="-webkit-text-stroke: 1.5px black;">MAKE THIS MISTAKE</span>'
+      },
+      clean_white: {
+        badge: '⚪ Clean (Minimal White)',
+        badgeClass: 'text-slate-300 border-slate-500/30 bg-slate-500/10',
+        html: '<span class="text-white font-bold tracking-wide" style="-webkit-text-stroke: 1px black;">CLEAN MODERN SUBTITLES</span>'
+      },
+      netflix_standard: {
+        badge: '🎬 Netflix Standard (20 CPS Clean)',
+        badgeClass: 'text-red-400 border-red-500/30 bg-red-500/10',
+        html: '<span class="text-slate-100 font-medium tracking-normal text-sm sm:text-base" style="-webkit-text-stroke: 0.5px rgba(0,0,0,0.8);">Standard streaming timed text formatted at twenty characters per second.</span>'
+      },
+      bbc_sdh: {
+        badge: '📺 BBC SDH (Broadcast Box)',
+        badgeClass: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10',
+        html: '<span class="bg-black text-yellow-300 font-bold px-2 py-0.5 tracking-normal text-sm sm:text-base border border-neutral-800">SPEAKER 1: High-contrast broadcast caption</span>'
+      },
+      cinematic_auteur: {
+        badge: '🎞️ Auteur Film (Serif Letterbox)',
+        badgeClass: 'text-amber-300 border-amber-500/30 bg-amber-500/10',
+        html: '<span class="text-amber-100 italic tracking-wide text-sm sm:text-base" style="font-family: Georgia, serif; text-shadow: 0 2px 6px rgba(0,0,0,0.9);">In the quiet of the night, every whisper resonates.</span>'
+      },
+      kinetic_pop: {
+        badge: '⚡ Kinetic Pop (TikTok / Reels)',
+        badgeClass: 'text-yellow-300 border-yellow-400/40 bg-yellow-500/15',
+        html: '<span class="text-yellow-300 text-lg sm:text-xl font-black tracking-wider uppercase" style="-webkit-text-stroke: 1.8px black;">WATCH</span> <span class="text-white text-base sm:text-lg font-black tracking-wide uppercase" style="-webkit-text-stroke: 1.8px black;">THIS 🔥</span>'
+      }
+    };
+
+    // --- HTML ESCAPE HELPER ---
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatNumber(num) {
+      if (!num && num !== 0) return 'N/A';
+      if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+      if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+      return Number(num).toLocaleString();
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr || String(dateStr).length !== 8) return 'N/A';
+      const s = String(dateStr);
+      return `${s.substring(0, 4)}-${s.substring(4, 6)}-${s.substring(6, 8)}`;
+    }
+
+    function formatSeconds(secs) {
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60);
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    // --- TOAST UTILITY ---
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      if (!toast || !toastMsg) return;
+      toastMsg.innerText = msg;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3000);
+    }
+
+    // --- TAB SWITCHER: MAIN STUDIO TABS ---
+    function switchMainTab(mode) {
+      currentMainTab = mode;
+      const viewClipper = document.getElementById('viewClipper');
+      const viewNicheFinder = document.getElementById('viewNicheFinder');
+      const btnTabClipper = document.getElementById('btnTabClipper');
+      const btnTabNiche = document.getElementById('btnTabNiche');
+
+      if (mode === 'clipper') {
+        viewClipper.classList.remove('hidden');
+        viewNicheFinder.classList.add('hidden');
+        btnTabClipper.className = 'flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30';
+        btnTabNiche.className = 'flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white';
+      } else {
+        viewClipper.classList.add('hidden');
+        viewNicheFinder.classList.remove('hidden');
+        btnTabClipper.className = 'flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white';
+        btnTabNiche.className = 'flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30';
+      }
+
+      if (window.lucide) lucide.createIcons();
+    }
+
+    // --- THE BRIDGE FEATURE: 1-CLICK SEND TO CLIPPER ---
+    function sendVideoToClipper(url, title = 'Video') {
+      if (!url) return;
+
+      // 1. Switch to clipper view
+      switchMainTab('clipper');
+
+      // 2. Populate input
+      const input = document.getElementById('urlInput');
+      input.value = url;
+
+      // 3. Smooth scroll to input
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      // 4. Focus and flash highlight
+      input.focus();
+      input.classList.add('flash-highlight', 'border-indigo-400');
+      setTimeout(() => {
+        input.classList.remove('flash-highlight', 'border-indigo-400');
+      }, 2500);
+
+      // 5. Toast confirmation
+      const shortTitle = title.length > 35 ? title.substring(0, 32) + '...' : title;
+      showToast(`⚡ Loaded "${shortTitle}" into Clipper! Ready to generate.`);
+    }
+
+    // --- SETTINGS & SOCIAL MODAL ---
+    function switchSettingsTab(tab) {
+      const tabSocial = document.getElementById('settings-tab-social');
+      const tabAi = document.getElementById('settings-tab-ai');
+      const btnSocial = document.getElementById('tab-btn-social');
+      const btnAi = document.getElementById('tab-btn-ai');
+      if (tab === 'social') {
+        if (tabSocial) tabSocial.classList.remove('hidden');
+        if (tabAi) tabAi.classList.add('hidden');
+        if (btnSocial) btnSocial.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition bg-indigo-600 text-white flex items-center gap-1.5';
+        if (btnAi) btnAi.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white flex items-center gap-1.5';
+      } else {
+        if (tabSocial) tabSocial.classList.add('hidden');
+        if (tabAi) tabAi.classList.remove('hidden');
+        if (btnSocial) btnSocial.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white flex items-center gap-1.5';
+        if (btnAi) btnAi.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition bg-indigo-600 text-white flex items-center gap-1.5';
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    async function loadUploadConfigIntoSettings() {
+      try {
+        const res = await fetch('/api/upload/config');
+        const json = await res.json();
+        const cfg = json.config || {};
+        
+        // YouTube
+        const ytCfg = cfg.youtube || {};
+        const ytBadge = document.getElementById('yt-status-badge');
+        const ytContainer = document.getElementById('yt-connect-container');
+        if (ytBadge) {
+          if (ytCfg.is_authenticated) {
+            ytBadge.innerText = '✓ ' + (ytCfg.channel_title || 'Connected');
+            ytBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+            if (ytContainer) {
+              ytContainer.innerHTML = `
+                <span class="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+                  <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i> Connected: <span class="text-white">${escapeHtml(ytCfg.channel_title || 'Channel')}</span>
+                </span>
+                <button type="button" onclick="startYouTubeOAuth()" class="ml-auto text-[11px] text-slate-400 hover:text-slate-200 underline">Reconnect</button>
+              `;
+            }
+          } else {
+            ytBadge.innerText = 'Not Connected';
+            ytBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30';
+          }
+        }
+
+        // Ayrshare
+        const ayrCfg = cfg.ayrshare || {};
+        const ayrBadge = document.getElementById('ayr-status-badge');
+        if (ayrBadge) {
+          if (ayrCfg.is_configured) {
+            ayrBadge.innerText = '✓ Configured';
+            ayrBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+          } else {
+            ayrBadge.innerText = 'Not Set';
+            ayrBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700';
+          }
+        }
+
+        // Auto-upload
+        const autoCfg = cfg.auto_upload || {};
+        const autoChk = document.getElementById('chk-auto-upload-enabled');
+        if (autoChk) autoChk.checked = !!autoCfg.enabled;
+
+        const privSel = document.getElementById('select-default-privacy');
+        if (privSel && autoCfg.default_privacy) privSel.value = autoCfg.default_privacy;
+
+        const chkYt = document.getElementById('chk-auto-yt');
+        const chkTt = document.getElementById('chk-auto-tt');
+        const chkIg = document.getElementById('chk-auto-ig');
+        const platforms = autoCfg.platforms || ['youtube'];
+        if (chkYt) chkYt.checked = platforms.includes('youtube');
+        if (chkTt) chkTt.checked = platforms.includes('tiktok');
+        if (chkIg) chkIg.checked = platforms.includes('instagram');
+
+        if (window.lucide) lucide.createIcons();
+      } catch (err) {
+        console.error('Failed to load upload config:', err);
+      }
+    }
+
+    function openSettingsModal() {
+      const modal = document.getElementById('modal-settings');
+      const inputKey = document.getElementById('input-gemini-key');
+      inputKey.value = localStorage.getItem('tg_gemini_key') || '';
+      loadUploadConfigIntoSettings();
+      modal.classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function closeSettingsModal() {
+      document.getElementById('modal-settings').classList.add('hidden');
+    }
+
+    async function saveSettingsModal() {
+      const inputKey = document.getElementById('input-gemini-key');
+      localStorage.setItem('tg_gemini_key', inputKey.value.trim());
+
+      const ayrKey = document.getElementById('input-ayrshare-key') ? document.getElementById('input-ayrshare-key').value.trim() : '';
+      const autoUpload = document.getElementById('chk-auto-upload-enabled') ? document.getElementById('chk-auto-upload-enabled').checked : false;
+      const defaultPrivacy = document.getElementById('select-default-privacy') ? document.getElementById('select-default-privacy').value : 'public';
+      
+      const platforms = [];
+      if (document.getElementById('chk-auto-yt')?.checked) platforms.push('youtube');
+      if (document.getElementById('chk-auto-tt')?.checked) platforms.push('tiktok');
+      if (document.getElementById('chk-auto-ig')?.checked) platforms.push('instagram');
+
+      try {
+        const res = await fetch('/api/upload/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ayrshare_key: ayrKey,
+            auto_upload: {
+              enabled: autoUpload,
+              default_privacy: defaultPrivacy,
+              platforms: platforms
+            }
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Settings saved successfully! ⚙️');
+        }
+      } catch (e) {
+        console.error(e);
+      }
+
+      closeSettingsModal();
+    }
+
+    async function startYouTubeOAuth() {
+      showToast('Opening Google sign-in... Please click "Allow" in your browser!');
+      try {
+        const res = await fetch('/api/upload/youtube-auth-start', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('🎉 YouTube Connected: ' + (data.channel_title || 'Ready!'));
+          loadUploadConfigIntoSettings();
+          return;
+        }
+
+        // Fallback to URL prompt flow if local server was blocked
+        const urlRes = await fetch('/api/upload/youtube-auth-url');
+        const urlData = await urlRes.json();
+        if (!urlData.success) {
+          alert(urlData.error || 'Failed to start YouTube authentication. Check client_secrets.json.');
+          return;
+        }
+
+        window.open(urlData.auth_url, '_blank');
+
+        const code = prompt('Please authorize your YouTube channel in the opened Google tab, then paste the Authorization Code here:');
+        if (!code || !code.trim()) return;
+
+        showToast('Connecting YouTube channel...');
+        const postRes = await fetch('/api/upload/youtube-auth-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: code.trim() })
+        });
+        const postData = await postRes.json();
+        if (postData.success) {
+          showToast('🎉 YouTube Connected: ' + (postData.channel_title || 'Ready!'));
+          loadUploadConfigIntoSettings();
+        } else {
+          alert('Error connecting YouTube: ' + (postData.error || 'Invalid code'));
+        }
+      } catch (err) {
+        alert('Error connecting YouTube: ' + err.message);
+      }
+    }
+
+    // --- CLIPPER FORM LOGIC ---
+    function setSubtitleStyle(key) {
+      selectedStyle = key;
+      const p = STYLE_PREVIEWS[key] || STYLE_PREVIEWS['hormozi'];
+      const badge = document.getElementById('stylePreviewBadge');
+      badge.innerText = p.badge;
+      badge.className = `text-[11px] font-bold px-2 py-0.5 rounded border ${p.badgeClass}`;
+      document.getElementById('previewSampleText').innerHTML = p.html;
+
+      document.querySelectorAll('.style-btn').forEach(btn => {
+        if (btn.getAttribute('data-style') === key) {
+          btn.className = 'style-btn p-2 rounded-xl border border-indigo-500 bg-indigo-600/20 text-white text-left transition flex flex-col items-center justify-center gap-0.5 shadow-lg';
+        } else {
+          btn.className = 'style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5';
+        }
+      });
+    }
+
+    function setClipCount(val) {
+      selectedClipCount = val;
+      document.querySelectorAll('.clip-count-btn').forEach(btn => {
+        if (parseInt(btn.getAttribute('data-val')) === val) {
+          btn.className = 'clip-count-btn px-3 py-1 text-xs font-semibold rounded-md transition bg-indigo-600 text-white shadow';
+        } else {
+          btn.className = 'clip-count-btn px-3 py-1 text-xs font-semibold rounded-md transition text-slate-400 hover:text-white';
+        }
+      });
+    }
+
+    async function pasteFromClipboard() {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          document.getElementById('urlInput').value = text;
+          showToast('Pasted from clipboard!');
+        }
+      } catch (err) {
+        alert('Could not access clipboard. Please press Ctrl+V to paste manually.');
+      }
+    }
+
+    function copyText(text, btnElement) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Copied to clipboard! 📋');
+        if (btnElement) {
+          const original = btnElement.innerHTML;
+          btnElement.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i> Copied!`;
+          if (window.lucide) lucide.createIcons();
+          setTimeout(() => {
+            btnElement.innerHTML = original;
+            if (window.lucide) lucide.createIcons();
+          }, 2000);
+        }
+      });
+    }
+
+    function copyEncodedText(encodedText, btnElement) {
+      try {
+        const decoded = decodeURIComponent(encodedText);
+        copyText(decoded, btnElement);
+      } catch (e) {
+        copyText(encodedText, btnElement);
+      }
+    }
+
+    async function openOutputFolder() {
+      try {
+        await fetch('/api/open-folder', { method: 'POST' });
+        showToast('Opened output folder in Windows Explorer! 📂');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function setFramingUI(mode) {
+      const labelBlurred = document.getElementById('labelBlurred');
+      const labelFace = document.getElementById('labelFace');
+      const labelSplit = document.getElementById('labelSplit');
+      const activeClass = 'px-2.5 py-1 text-[11px] font-semibold rounded-md cursor-pointer transition text-white bg-indigo-600 shadow';
+      const inactiveClass = 'px-2.5 py-1 text-[11px] font-semibold rounded-md cursor-pointer transition text-slate-400 hover:text-white';
+      
+      if (labelBlurred) labelBlurred.className = mode === 'blurred' ? activeClass : inactiveClass;
+      if (labelFace) labelFace.className = mode === 'smart_face' ? activeClass : inactiveClass;
+      if (labelSplit) labelSplit.className = mode === 'split_gaming' ? activeClass : inactiveClass;
+    }
+
+    async function handleStart(e) {
+      e.preventDefault();
+      const url = document.getElementById('urlInput').value.trim();
+      if (!url) return;
+
+      const enableBroll = document.getElementById('brollToggle') ? document.getElementById('brollToggle').checked : true;
+      const enableEmojis = document.getElementById('emojiToggle') ? document.getElementById('emojiToggle').checked : true;
+      const enableSnappy = document.getElementById('snappyToggle') ? document.getElementById('snappyToggle').checked : true;
+      const enableZooms = document.getElementById('zoomToggle') ? document.getElementById('zoomToggle').checked : true;
+      const enableOutro = document.getElementById('outroToggle') ? document.getElementById('outroToggle').checked : true;
+      const enableSponsorKiller = document.getElementById('sponsorKillerToggle') ? document.getElementById('sponsorKillerToggle').checked : true;
+      const enableAutoBleep = document.getElementById('autoBleepToggle') ? document.getElementById('autoBleepToggle').checked : false;
+      const framingRadio = document.querySelector('input[name="framingMode"]:checked');
+      const framingMode = framingRadio ? framingRadio.value : 'blurred';
+
+      document.getElementById('errorAlert').classList.add('hidden');
+      document.getElementById('progressSection').classList.remove('hidden');
+      document.getElementById('submitBtn').disabled = true;
+
+      updateProgress(5, "Submitting video to clipper...");
+
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: url,
+            top_k: selectedClipCount,
+            candidates: Math.max(16, selectedClipCount * 4),
+            subtitle_style: selectedStyle,
+            threshold: 7.0,
+            max_attempts: 4,
+            enable_broll: enableBroll,
+            enable_emojis: enableEmojis,
+            framing_mode: framingMode,
+            enable_snappy_cuts: enableSnappy,
+            enable_punch_zooms: enableZooms,
+            enable_outro: enableOutro,
+            enable_sponsor_killer: enableSponsorKiller,
+            enable_auto_bleep: enableAutoBleep
+          })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to start generation');
+        }
+
+        activeJobId = data.job_id;
+        pollInterval = setInterval(checkJobStatus, 1200);
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function checkJobStatus() {
+      if (!activeJobId) return;
+
+      try {
+        const res = await fetch(`/api/status/${activeJobId}`);
+        const data = await res.json();
+
+        updateProgress(data.progress || 0, data.step || "Processing...");
+
+        if (data.status === 'completed') {
+          clearInterval(pollInterval);
+          activeJobId = null;
+          document.getElementById('submitBtn').disabled = false;
+          showToast('All clips generated successfully! 🎉');
+          setTimeout(() => {
+            document.getElementById('progressSection').classList.add('hidden');
+          }, 2000);
+          loadClips();
+        } else if (data.status === 'failed') {
+          clearInterval(pollInterval);
+          activeJobId = null;
+          document.getElementById('submitBtn').disabled = false;
+          showError(data.error || 'Job failed unexpectedly');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function updateProgress(pct, text) {
+      document.getElementById('progressBar').style.width = `${pct}%`;
+      document.getElementById('progressPercent').innerText = `${pct}%`;
+      document.getElementById('progressStep').innerText = text;
+    }
+
+    function showError(msg) {
+      document.getElementById('progressSection').classList.add('hidden');
+      document.getElementById('errorAlert').classList.remove('hidden');
+      document.getElementById('errorMessage').innerText = msg;
+      document.getElementById('submitBtn').disabled = false;
+    }
+
+    let currentUploadClip = null;
+
+    async function loadClips() {
+      try {
+        const res = await fetch('/api/clips');
+        const data = await res.json();
+        const clips = data.clips || [];
+        window.currentClipsList = clips;
+        const grid = document.getElementById('clipsGrid');
+        const emptyState = document.getElementById('emptyState');
+        const badge = document.getElementById('clipCountBadge');
+
+        badge.innerText = `${clips.length} clip${clips.length === 1 ? '' : 's'}`;
+
+        if (clips.length === 0) {
+          grid.innerHTML = '';
+          emptyState.classList.remove('hidden');
+          return;
+        }
+
+        emptyState.classList.add('hidden');
+        grid.innerHTML = clips.map((c, i) => {
+          const hashtagsStr = (c.suggested_hashtags || []).join(' ');
+          const rawTitle = c.suggested_title || `Viral Moment #${c.rank || i+1}`;
+          const title = escapeHtml(rawTitle);
+          const cat = escapeHtml((c.niche || c.category || 'High Value').replace('_', ' '));
+          const score = c.virality_score ? c.virality_score.toFixed(1) : '2.0';
+          const rubricAvg = c.rubric_average ? Number(c.rubric_average).toFixed(1) : (c.virality_score ? (c.virality_score * 3.0).toFixed(1) : '6.5');
+          const rubric = c.rubric_scores || {};
+          const passed = c.passed_gate !== undefined ? c.passed_gate : (Number(rubricAvg) >= 7.0);
+          const notes = escapeHtml(c.critique_notes || '');
+          const hookCount = (c.candidate_titles && c.candidate_titles.length) || 0;
+
+          let uploadReceiptsHtml = '';
+          const lastUpload = (c.upload_history && c.upload_history.length > 0) ? c.upload_history[c.upload_history.length - 1] : null;
+          if (lastUpload && lastUpload.results) {
+            const ur = lastUpload.results;
+            if (ur.youtube && (ur.youtube.status === 'uploaded' || ur.youtube.success)) {
+              const ytUrl = ur.youtube.video_id ? `https://youtube.com/shorts/${ur.youtube.video_id}` : '#';
+              uploadReceiptsHtml += `
+                <a href="${ytUrl}" target="_blank" class="inline-flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/30 px-2 py-0.5 rounded-full hover:bg-red-500/20 transition">
+                  <i data-lucide="youtube" class="w-3 h-3"></i> YouTube Short ↗
+                </a>
+              `;
+            }
+            if (ur.tiktok && (ur.tiktok.status === 'uploaded' || ur.tiktok.success)) {
+              uploadReceiptsHtml += `
+                <span class="inline-flex items-center gap-1 text-[10px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 px-2 py-0.5 rounded-full">
+                  <i data-lucide="music-2" class="w-3 h-3"></i> TikTok ✓
+                </span>
+              `;
+            }
+            if (ur.instagram && (ur.instagram.status === 'uploaded' || ur.instagram.success)) {
+              uploadReceiptsHtml += `
+                <span class="inline-flex items-center gap-1 text-[10px] font-bold text-pink-400 bg-pink-500/10 border border-pink-500/30 px-2 py-0.5 rounded-full">
+                  <i data-lucide="instagram" class="w-3 h-3"></i> IG Reel ✓
+                </span>
+              `;
+            }
+          }
+
+          return `
+            <div class="glass-card rounded-2xl overflow-hidden flex flex-col justify-between border-slate-800 shadow-xl hover:border-slate-700 transition">
+              <!-- Video Player -->
+              <div class="relative bg-black flex items-center justify-center">
+                <video
+                  src="/output/${c.filename}"
+                  controls
+                  playsinline
+                  preload="metadata"
+                  class="w-full max-h-[380px] object-contain rounded-t-xl"
+                ></video>
+                <div class="absolute top-3 left-3 bg-black/80 backdrop-blur px-2.5 py-1 rounded-md text-[11px] font-bold text-amber-400 border border-amber-400/20 flex items-center gap-1">
+                  <i data-lucide="flame" class="w-3.5 h-3.5 fill-amber-400"></i> ${score}/3.0
+                </div>
+                <div class="absolute top-3 left-24 bg-black/80 backdrop-blur px-2.5 py-1 rounded-md text-[11px] font-bold ${passed ? 'text-emerald-400 border-emerald-400/30' : 'text-amber-400 border-amber-400/30'} border flex items-center gap-1">
+                  <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> ${rubricAvg}/10
+                </div>
+                <div class="absolute top-3 right-3 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-[11px] font-medium text-slate-300 border border-white/10">
+                  ⏱️ ${c.duration}s
+                </div>
+              </div>
+
+              <!-- Metadata & Actions -->
+              <div class="p-5 space-y-4 flex-1 flex flex-col justify-between">
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider">
+                    <span class="flex items-center gap-1.5 text-indigo-400">
+                      <i data-lucide="tag" class="w-3 h-3"></i> ${cat}
+                    </span>
+                    <div class="flex items-center gap-1 flex-wrap justify-end">
+                      ${hookCount > 1 ? `<span class="text-indigo-300 font-mono text-[9px] bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/30" title="Jev Hook Alternatives Available">⚡ ${hookCount} Hooks</span>` : ''}
+                      ${c.enable_snappy_cuts ? '<span class="text-amber-400 font-mono text-[9px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30" title="Snappy Jump-Cuts">⚡ Snappy</span>' : ''}
+                      ${c.enable_punch_zooms ? '<span class="text-amber-400 font-mono text-[9px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30" title="1.25x Punch Zooms">💥 Zoom</span>' : ''}
+                      ${c.enable_outro ? '<span class="text-red-400 font-mono text-[9px] bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/30" title="Subscribe Outro">🔴 Outro</span>' : ''}
+                      ${c.enable_auto_bleep ? '<span class="text-emerald-400 font-mono text-[9px] bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30" title="Profanity Bleeped">🤬 Bleep</span>' : ''}
+                      ${c.enable_sponsor_killer ? '<span class="text-emerald-400 font-mono text-[9px] bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30" title="Clean Non-Sponsor Content">🚫 Clean</span>' : ''}
+                      <span class="text-slate-400 font-mono text-[10px] bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/50">
+                        ${c.subtitle_style ? escapeHtml(c.subtitle_style.replace('_', ' ')) : 'bold pop'}
+                      </span>
+                    </div>
+                  </div>
+
+                  ${uploadReceiptsHtml ? `<div class="flex items-center gap-1.5 flex-wrap">${uploadReceiptsHtml}</div>` : ''}
+
+                  <h4 class="text-sm font-bold text-white leading-snug line-clamp-2">${title}</h4>
+
+                  <!-- 6-Dimension Critique Gate Rubric -->
+                  <div class="space-y-1.5 pt-1">
+                    <div class="flex items-center justify-between text-[10px] text-slate-400 font-semibold">
+                      <span class="flex items-center gap-1 text-slate-300">
+                        <i data-lucide="shield-check" class="w-3.5 h-3.5 text-indigo-400"></i>
+                        <span>Rubric Evaluation</span>
+                      </span>
+                      <span class="${passed ? 'text-emerald-400' : 'text-amber-400'} font-bold">
+                        ${passed ? '✓ Passed (>=7.0)' : 'Best Attempt'}
+                      </span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1 text-[10px] bg-slate-950/70 p-2 rounded-lg border border-slate-800/80">
+                      <div class="text-slate-400 flex justify-between pr-1">Hook: <span class="font-bold text-slate-200">${rubric.hook ? rubric.hook + '/10' : '-'}</span></div>
+                      <div class="text-slate-400 flex justify-between pr-1">Clarity: <span class="font-bold text-slate-200">${rubric.clarity ? rubric.clarity + '/10' : '-'}</span></div>
+                      <div class="text-slate-400 flex justify-between">Pacing: <span class="font-bold text-slate-200">${rubric.pacing ? rubric.pacing + '/10' : '-'}</span></div>
+                      <div class="text-slate-400 flex justify-between pr-1">Payoff: <span class="font-bold text-slate-200">${rubric.payoff ? rubric.payoff + '/10' : '-'}</span></div>
+                      <div class="text-slate-400 flex justify-between pr-1">Share: <span class="font-bold text-slate-200">${rubric.shareability ? rubric.shareability + '/10' : '-'}</span></div>
+                      <div class="text-slate-400 flex justify-between">Subs: <span class="font-bold text-slate-200">${rubric.subtitles ? rubric.subtitles + '/10' : '-'}</span></div>
+                    </div>
+                    ${notes ? `<div class="text-[10px] text-slate-400 italic bg-slate-900/60 p-2 rounded-lg border border-slate-800/70">💡 ${notes}</div>` : ''}
+                  </div>
+                </div>
+
+                <div class="space-y-2 pt-2 border-t border-slate-800/80">
+                  <button
+                    onclick="openUploadModalByIndex(${i})"
+                    class="w-full flex items-center justify-center gap-2 py-2 px-3 text-xs font-bold rounded-lg bg-gradient-to-r from-red-600 via-pink-600 to-indigo-600 hover:from-red-500 hover:to-indigo-500 text-white shadow-md shadow-indigo-600/20 transition cursor-pointer"
+                  >
+                    <i data-lucide="share-2" class="w-3.5 h-3.5"></i> 🚀 Auto-Upload (YT/TikTok/IG)
+                  </button>
+
+                  <div class="grid grid-cols-2 gap-2">
+                    <button
+                      onclick="copyEncodedText('${encodeURIComponent(rawTitle).replace(/'/g, "%27")}', this)"
+                      class="flex items-center justify-center gap-1.5 py-1.5 px-2 text-[11px] font-semibold rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/60 transition"
+                    >
+                      <i data-lucide="copy" class="w-3 h-3 text-indigo-400"></i> Copy Title
+                    </button>
+
+                    <button
+                      onclick="copyEncodedText('${encodeURIComponent(hashtagsStr).replace(/'/g, "%27")}', this)"
+                      class="flex items-center justify-center gap-1.5 py-1.5 px-2 text-[11px] font-semibold rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/60 transition"
+                    >
+                      <i data-lucide="hash" class="w-3 h-3 text-violet-400"></i> Copy Tags
+                    </button>
+                  </div>
+
+                  <a
+                    href="/output/${c.filename}"
+                    download="${c.filename}"
+                    class="w-full flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition text-center"
+                  >
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i> Download MP4 (${c.size_mb || '2'} MB)
+                  </a>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+        if (window.lucide) lucide.createIcons();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // --- UPLOAD MODAL JS CONTROLLERS ---
+    function openUploadModalByIndex(index) {
+      if (!window.currentClipsList || !window.currentClipsList[index]) return;
+      const clip = window.currentClipsList[index];
+      currentUploadClip = clip;
+
+      const filenameEl = document.getElementById('upload-clip-filename');
+      const nicheEl = document.getElementById('upload-clip-niche');
+      if (filenameEl) filenameEl.innerText = clip.filename || 'clip.mp4';
+      if (nicheEl) nicheEl.innerText = (clip.niche || clip.category || 'High Value').replace('_', ' ');
+
+      const titleInput = document.getElementById('upload-title-input');
+      if (titleInput) {
+        titleInput.value = clip.suggested_title || clip.title || `Viral Moment #${index + 1}`;
+        updateCharCount();
+      }
+
+      // Populate candidate hooks
+      const candContainer = document.getElementById('upload-candidates-container');
+      const candChips = document.getElementById('upload-candidate-chips');
+      if (candChips) candChips.innerHTML = '';
+
+      const candidates = clip.candidate_titles || [];
+      if (candidates.length > 0 && candContainer && candChips) {
+        candContainer.classList.remove('hidden');
+        candidates.forEach((cand) => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'text-left p-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 transition flex items-center justify-between group';
+          chip.innerHTML = `
+            <span class="font-medium group-hover:text-white line-clamp-1">${escapeHtml(cand.title)}</span>
+            <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-indigo-600/20 text-indigo-300 font-mono shrink-0 ml-2">${escapeHtml(cand.framework || 'hook')}</span>
+          `;
+          chip.onclick = () => {
+            if (titleInput) {
+              titleInput.value = cand.title;
+              updateCharCount();
+              showToast('Selected hook: ' + (cand.framework || 'Viral'));
+            }
+          };
+          candChips.appendChild(chip);
+        });
+      } else if (candContainer) {
+        candContainer.classList.add('hidden');
+      }
+
+      // Description & hashtags
+      const hashtags = (clip.suggested_hashtags || []).join(' ');
+      const descInput = document.getElementById('upload-desc-input');
+      if (descInput) {
+        const titleVal = titleInput ? titleInput.value : '';
+        descInput.value = `${titleVal}\n\n${hashtags}`;
+      }
+
+      // Reset status area
+      const statusArea = document.getElementById('upload-status-area');
+      if (statusArea) {
+        statusArea.className = 'hidden p-3 rounded-xl text-xs space-y-1';
+        statusArea.innerHTML = '';
+      }
+      const submitBtn = document.getElementById('btn-submit-upload');
+      if (submitBtn) submitBtn.disabled = false;
+
+      const modal = document.getElementById('modal-upload');
+      if (modal) modal.classList.remove('hidden');
+
+      // Check upload config status to warn proactively if accounts are not connected
+      fetch('/api/upload/config').then(r => r.json()).then(data => {
+        const cfg = data.config || {};
+        const ytConnected = cfg.youtube && cfg.youtube.is_authenticated;
+        const ayrConnected = cfg.ayrshare && cfg.ayrshare.is_configured;
+        const banner = document.getElementById('upload-not-connected-banner');
+        if (banner) {
+          if (!ytConnected && !ayrConnected) {
+            banner.classList.remove('hidden');
+          } else {
+            banner.classList.add('hidden');
+          }
+          if (window.lucide) lucide.createIcons();
+        }
+      }).catch(e => console.error(e));
+
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function closeUploadModal() {
+      const modal = document.getElementById('modal-upload');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function updateCharCount() {
+      const input = document.getElementById('upload-title-input');
+      const count = document.getElementById('title-char-count');
+      if (input && count) {
+        const len = input.value.length;
+        count.innerText = `${len}/100`;
+        count.className = len > 100 ? 'text-[10px] text-red-400 font-bold font-mono' : 'text-[10px] text-slate-400 font-mono';
+      }
+    }
+
+    async function executeUploadFromModal() {
+      if (!currentUploadClip) return;
+      const filename = currentUploadClip.filename;
+      const title = document.getElementById('upload-title-input') ? document.getElementById('upload-title-input').value.trim() : '';
+      const description = document.getElementById('upload-desc-input') ? document.getElementById('upload-desc-input').value.trim() : '';
+      const privacy = document.getElementById('upload-privacy-select') ? document.getElementById('upload-privacy-select').value : 'public';
+
+      const platforms = [];
+      if (document.getElementById('chk-platform-yt')?.checked) platforms.push('youtube');
+      if (document.getElementById('chk-platform-tt')?.checked) platforms.push('tiktok');
+      if (document.getElementById('chk-platform-ig')?.checked) platforms.push('instagram');
+
+      if (platforms.length === 0) {
+        alert('Please select at least one platform to upload to.');
+        return;
+      }
+
+      const btn = document.getElementById('btn-submit-upload');
+      const statusArea = document.getElementById('upload-status-area');
+      if (btn) btn.disabled = true;
+      if (statusArea) {
+        statusArea.classList.remove('hidden');
+        statusArea.className = 'p-3 rounded-xl text-xs bg-indigo-950/60 border border-indigo-800/80 text-indigo-200 flex items-center gap-2';
+        statusArea.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin text-indigo-400"></i> Publishing clip to selected platforms...`;
+      }
+      if (window.lucide) lucide.createIcons();
+
+      try {
+        const res = await fetch('/api/upload/clip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: filename,
+            title: title,
+            description: description,
+            hashtags: (currentUploadClip.suggested_hashtags || []),
+            platforms: platforms,
+            privacy: privacy
+          })
+        });
+        const data = await res.json();
+
+        if (!data.success) {
+          if (statusArea) {
+            statusArea.className = 'p-3 rounded-xl text-xs bg-red-950/60 border border-red-800/80 text-red-200 space-y-2';
+            let errMsg = data.error;
+            if (!errMsg && data.results) {
+              const parts = [];
+              for (const [p, r] of Object.entries(data.results)) {
+                if (r && r.error) parts.push(`<strong>${p.toUpperCase()}:</strong> ${escapeHtml(r.error)}`);
+              }
+              if (parts.length) errMsg = parts.join('<br>');
+            }
+            if (!errMsg) errMsg = 'Unknown error';
+
+            const needsConfig = String(errMsg).toLowerCase().includes('not authenticated') || String(errMsg).toLowerCase().includes('settings') || String(errMsg).toLowerCase().includes('secrets');
+            statusArea.innerHTML = `
+              <div class="leading-relaxed"><strong>Upload Failed:</strong> ${errMsg}</div>
+              ${needsConfig ? `
+                <div class="pt-1">
+                  <button type="button" onclick="closeUploadModal(); openSettingsModal();" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition">
+                    <i data-lucide="settings" class="w-3.5 h-3.5"></i> Open Settings to Connect Channel
+                  </button>
+                </div>
+              ` : ''}
+            `;
+          }
+          if (btn) btn.disabled = false;
+          if (window.lucide) lucide.createIcons();
+          return;
+        }
+
+        const results = data.results || {};
+        let html = `<div class="font-bold text-emerald-400 flex items-center gap-1.5"><i data-lucide="check-circle" class="w-4 h-4"></i> Upload Process Completed!</div>`;
+        
+        if (results.youtube) {
+          if (results.youtube.status === 'uploaded' || results.youtube.success) {
+            const shortUrl = results.youtube.video_id ? `https://youtube.com/shorts/${results.youtube.video_id}` : '#';
+            html += `<div class="flex items-center justify-between text-slate-200 pt-1">
+              <span>YouTube Shorts:</span>
+              <a href="${shortUrl}" target="_blank" class="text-red-400 hover:underline font-bold">Watch Video ↗</a>
+            </div>`;
+          } else {
+            html += `<div class="text-red-300">YouTube: ${escapeHtml(results.youtube.error || 'Failed')}</div>`;
+          }
+        }
+
+        if (results.tiktok) {
+          if (results.tiktok.status === 'uploaded' || results.tiktok.success) {
+            html += `<div class="text-emerald-300 pt-1">TikTok: Published ✓</div>`;
+          } else {
+            html += `<div class="text-amber-300">TikTok: ${escapeHtml(results.tiktok.error || 'Failed')}</div>`;
+          }
+        }
+
+        if (results.instagram) {
+          if (results.instagram.status === 'uploaded' || results.instagram.success) {
+            html += `<div class="text-emerald-300 pt-1">Instagram Reels: Published ✓</div>`;
+          } else {
+            html += `<div class="text-amber-300">Instagram: ${escapeHtml(results.instagram.error || 'Failed')}</div>`;
+          }
+        }
+
+        if (statusArea) {
+          statusArea.className = 'p-3 rounded-xl text-xs bg-slate-950 border border-slate-800 space-y-1.5';
+          statusArea.innerHTML = html;
+        }
+        if (btn) btn.disabled = false;
+        if (window.lucide) lucide.createIcons();
+
+        // Reload clips to reflect updated metadata & receipts
+        loadClips();
+      } catch (err) {
+        if (statusArea) {
+          statusArea.className = 'p-3 rounded-xl text-xs bg-red-950/60 border border-red-800/80 text-red-200';
+          statusArea.innerHTML = `Error: ${escapeHtml(err.message)}`;
+        }
+        if (btn) btn.disabled = false;
+      }
+    }
+
+
+    // =========================================================================
+    // NICHE & OUTLIER FINDER LOGIC
+    // =========================================================================
+
+    function switchNicheSubTab(targetId) {
+      document.querySelectorAll('.tab-sub-btn').forEach(btn => {
+        if (btn.getAttribute('data-subtab') === targetId) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+
+      document.querySelectorAll('.niche-subtab-content').forEach(el => {
+        if (el.id === targetId) {
+          el.classList.remove('hidden');
+          el.classList.add('block');
+        } else {
+          el.classList.add('hidden');
+          el.classList.remove('block');
+        }
+      });
+
+      if (window.lucide) lucide.createIcons();
+    }
+
+    // --- TAB 1: NICHE DISCOVERY ---
+    const formSearchNiche = document.getElementById('form-search-niche');
+    const nicheQueryInput = document.getElementById('niche-query');
+    const nicheResultsContainer = document.getElementById('niche-results-container');
+    const nicheChannelsGrid = document.getElementById('niche-channels-grid');
+    const nicheCountBadge = document.getElementById('niche-count-badge');
+    const nicheLoading = document.getElementById('niche-loading');
+
+    async function executeNicheSearch(query) {
+      if (!query) return;
+
+      nicheResultsContainer.classList.add('hidden');
+      nicheLoading.classList.remove('hidden');
+
+      try {
+        const res = await fetch('/api/niche/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: query })
+        });
+        const data = await res.json();
+
+        nicheLoading.classList.add('hidden');
+
+        if (!data.success) {
+          showToast(data.error || 'Failed to search niche.');
+          return;
+        }
+
+        renderNicheChannels(data.channels, query);
+      } catch (err) {
+        nicheLoading.classList.add('hidden');
+        showToast('Error searching niche: ' + err.message);
+      }
+    }
+
+    if (formSearchNiche) {
+      formSearchNiche.addEventListener('submit', (e) => {
+        e.preventDefault();
+        executeNicheSearch(nicheQueryInput.value.trim());
+      });
+    }
+
+    // Chips click
+    document.querySelectorAll('.niche-chip').forEach(chip => {
+      chip.addEventListener('click', (e) => {
+        e.preventDefault();
+        const val = chip.textContent.trim();
+        nicheQueryInput.value = val;
+        executeNicheSearch(val);
+      });
+    });
+
+    function renderNicheChannels(channels, query) {
+      nicheChannelsGrid.innerHTML = '';
+      nicheCountBadge.textContent = `${channels.length} channels found`;
+
+      if (!channels || channels.length === 0) {
+        nicheChannelsGrid.innerHTML = `
+          <div class="col-span-full py-12 text-center text-slate-400">
+            <p>No distinct channels found for "${escapeHtml(query)}". Try another search term.</p>
+          </div>
+        `;
+        nicheResultsContainer.classList.remove('hidden');
+        return;
+      }
+
+      channels.forEach(ch => {
+        const card = document.createElement('div');
+        card.className = "glass-card rounded-2xl p-5 flex flex-col justify-between transition-all duration-200 border-slate-800 hover:border-sky-500/50 shadow-lg group";
+
+        const sample = ch.sample_videos && ch.sample_videos[0] ? ch.sample_videos[0] : null;
+        const sampleTitle = sample ? sample.title : 'Recent Upload';
+        const sampleViews = sample ? formatNumber(sample.views) : 'N/A';
+        const sampleThumb = sample ? sample.thumbnail : (ch.thumbnail || '');
+        const sampleUrl = sample ? sample.url : '';
+
+        const initialChar = ch.name ? escapeHtml(ch.name.charAt(0)) : '?';
+        const safeChName = escapeHtml(ch.name);
+        const safeChUrl = escapeHtml(ch.url || '');
+
+        card.innerHTML = `
+          <div class="space-y-3.5">
+            <div class="flex items-start gap-3">
+              <div class="w-11 h-11 rounded-xl bg-slate-800 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center font-bold text-sky-400">
+                ${ch.thumbnail ? `<img src="${escapeHtml(ch.thumbnail)}" alt="" class="w-full h-full object-cover">` : initialChar}
+              </div>
+              <div class="min-w-0 flex-1">
+                <h4 class="font-bold text-white text-sm truncate group-hover:text-sky-400 transition">${safeChName}</h4>
+                <p class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
+                  <span class="inline-flex items-center gap-1 text-slate-300">
+                    <i data-lucide="users" class="w-3 h-3 text-sky-400"></i>
+                    ${formatNumber(ch.subs)} subs
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            ${sample ? `
+              <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 flex gap-3 items-center">
+                <div class="w-14 h-10 rounded-lg overflow-hidden bg-slate-900 shrink-0 relative">
+                  ${sampleThumb ? `<img src="${escapeHtml(sampleThumb)}" class="w-full h-full object-cover">` : ''}
+                </div>
+                <div class="min-w-0 flex-1 text-xs">
+                  <p class="text-slate-300 font-medium truncate">${escapeHtml(sampleTitle)}</p>
+                  <p class="text-[11px] text-amber-400 font-semibold mt-0.5 flex items-center gap-1">
+                    <i data-lucide="eye" class="w-3 h-3"></i> ${sampleViews} views
+                  </p>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
+          <div class="mt-4 pt-3.5 border-t border-slate-800/80 flex items-center justify-between gap-2">
+            ${sampleUrl ? `
+              <button
+                type="button"
+                class="btn-card-clip px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-md shadow-indigo-600/20 transition"
+                data-url="${escapeHtml(sampleUrl)}"
+                data-title="${escapeHtml(sampleTitle)}"
+              >
+                <i data-lucide="zap" class="w-3.5 h-3.5 text-yellow-300"></i>
+                <span>Clip Video</span>
+              </button>
+            ` : `<span></span>`}
+
+            <button
+              type="button"
+              class="btn-analyze-ch px-3 py-1.5 bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition"
+              data-url="${safeChUrl}"
+              data-name="${safeChName}"
+            >
+              <span>Outliers</span>
+              <i data-lucide="arrow-right" class="w-3 h-3"></i>
+            </button>
+          </div>
+        `;
+
+        // Direct clip action
+        const btnClip = card.querySelector('.btn-card-clip');
+        if (btnClip) {
+          btnClip.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            sendVideoToClipper(btnClip.getAttribute('data-url'), btnClip.getAttribute('data-title'));
+          });
+        }
+
+        // Outlier deepdive action
+        const btnAnalyze = card.querySelector('.btn-analyze-ch');
+        if (btnAnalyze) {
+          btnAnalyze.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const target = btnAnalyze.getAttribute('data-url') || btnAnalyze.getAttribute('data-name');
+            if (!target) return;
+            document.getElementById('channel-input').value = target;
+            switchNicheSubTab('subtab-channel');
+            executeChannelDeepdive(target);
+          });
+        }
+
+        nicheChannelsGrid.appendChild(card);
+      });
+
+      nicheResultsContainer.classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+
+    // --- TAB 2: CHANNEL OUTLIER DEEP-DIVE ---
+    const formChannelDeepdive = document.getElementById('form-channel-deepdive');
+    const channelInput = document.getElementById('channel-input');
+    const channelResultsContainer = document.getElementById('channel-results-container');
+    const channelLoading = document.getElementById('channel-loading');
+    const channelVideosTbody = document.getElementById('channel-videos-tbody');
+
+    async function executeChannelDeepdive(chInput) {
+      if (!chInput) return;
+
+      channelResultsContainer.classList.add('hidden');
+      channelLoading.classList.remove('hidden');
+
+      try {
+        const res = await fetch('/api/niche/channel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel_input: chInput, max_videos: 30 })
+        });
+        const data = await res.json();
+
+        channelLoading.classList.add('hidden');
+
+        if (!data.success) {
+          showToast(data.error || 'Failed to analyze channel.');
+          return;
+        }
+
+        activeChannelData = data.data;
+        renderChannelResults(data.data);
+      } catch (err) {
+        channelLoading.classList.add('hidden');
+        showToast('Error analyzing channel: ' + err.message);
+      }
+    }
+
+    if (formChannelDeepdive) {
+      formChannelDeepdive.addEventListener('submit', (e) => {
+        e.preventDefault();
+        executeChannelDeepdive(channelInput.value.trim());
+      });
+    }
+
+    let currentSortColumn = 'outlier_multiplier';
+    let currentSortDirection = 'desc'; // 'desc' = High to Low by default
+    let activeChannelVideos = [];
+    let chartSortMode = 'timeline'; // 'timeline' or 'ranked'
+
+    function toggleChartSortMode() {
+      chartSortMode = chartSortMode === 'timeline' ? 'ranked' : 'timeline';
+      const label = document.getElementById('chart-order-label');
+      if (label) {
+        label.textContent = chartSortMode === 'ranked' ? 'Sort: Chronological' : 'Sort: High to Low';
+      }
+      if (activeChannelData && activeChannelVideos.length > 0) {
+        renderChannelChart(activeChannelVideos, activeChannelData.stats.median_views);
+      }
+    }
+
+    function renderChannelChart(videos, medianViews) {
+      const canvas = document.getElementById('channel-views-chart');
+      if (!canvas || !window.Chart) return;
+
+      try {
+        if (viewsChartInstance) {
+          viewsChartInstance.destroy();
+          viewsChartInstance = null;
+        }
+
+        if (!videos || videos.length === 0) return;
+
+        // Determine ordering for the chart display
+        let chartVideos = [...videos];
+        if (chartSortMode === 'ranked') {
+          chartVideos.sort((a, b) => (b.views || 0) - (a.views || 0));
+        } else {
+          chartVideos.sort((a, b) => {
+            if (a.upload_date && b.upload_date && a.upload_date !== b.upload_date) {
+              return a.upload_date.localeCompare(b.upload_date);
+            }
+            const orderA = a.upload_order !== undefined ? a.upload_order : videos.indexOf(a);
+            const orderB = b.upload_order !== undefined ? b.upload_order : videos.indexOf(b);
+            return orderB - orderA;
+          });
+        }
+
+        const labels = chartVideos.map((v, i) => `#${i + 1} ${v.title.length > 18 ? v.title.substring(0, 16) + '...' : v.title}`);
+        const viewsData = chartVideos.map(v => v.views || 0);
+        const bgColors = chartVideos.map(v => {
+          if (v.tier === 1) return 'rgba(239, 68, 68, 0.85)';    // Mega Outlier (Red)
+          if (v.tier === 2) return 'rgba(245, 158, 11, 0.85)';   // Breakout Hit (Amber)
+          if (v.tier === 3) return 'rgba(16, 185, 129, 0.85)';   // Above Average (Emerald)
+          return 'rgba(100, 116, 139, 0.6)';                     // Standard/Underperforming (Slate)
+        });
+
+        const medianLineData = chartVideos.map(() => medianViews);
+
+        const ctx = canvas.getContext('2d');
+        viewsChartInstance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Views',
+                data: viewsData,
+                backgroundColor: bgColors,
+                borderRadius: 6,
+                order: 2
+              },
+              {
+                label: 'Channel Median Baseline',
+                data: medianLineData,
+                type: 'line',
+                borderColor: '#38bdf8',
+                borderWidth: 2,
+                borderDash: [5, 5],
+                pointRadius: 0,
+                fill: false,
+                order: 1
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                display: false // Replaced with clean custom HTML legend
+              },
+              tooltip: {
+                backgroundColor: '#0b0f19',
+                titleColor: '#f8fafc',
+                bodyColor: '#cbd5e1',
+                borderColor: '#334155',
+                borderWidth: 1,
+                callbacks: {
+                  title: function(items) {
+                    const idx = items[0].dataIndex;
+                    return chartVideos[idx].title;
+                  },
+                  label: function(item) {
+                    const idx = item.dataIndex;
+                    const v = chartVideos[idx];
+                    if (item.datasetIndex === 0) {
+                      return `Views: ${formatNumber(v.views)} (${v.outlier_multiplier}x - ${v.badge})`;
+                    }
+                    return `Median Baseline: ${formatNumber(medianViews)}`;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                grid: { color: 'rgba(51, 65, 85, 0.2)' },
+                ticks: { color: '#64748b', font: { size: 9 } }
+              },
+              y: {
+                grid: { color: 'rgba(51, 65, 85, 0.2)' },
+                ticks: {
+                  color: '#64748b',
+                  font: { size: 9 },
+                  callback: function(val) { return formatNumber(val); }
+                }
+              }
+            }
+          }
+        });
+      } catch (chartErr) {
+        console.error("Chart rendering warning:", chartErr);
+      }
+    }
+
+    function applySort(column, direction = null) {
+      if (direction) {
+        currentSortDirection = direction;
+      } else if (currentSortColumn === column) {
+        currentSortDirection = currentSortDirection === 'desc' ? 'asc' : 'desc';
+      } else {
+        currentSortDirection = 'desc'; // New column defaults to High-to-Low
+      }
+      currentSortColumn = column;
+
+      // Update quick sort chips
+      document.querySelectorAll('.sort-chip').forEach(btn => {
+        if (btn.getAttribute('data-sort') === column) {
+          btn.className = 'sort-chip active px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-semibold text-[11px] transition shadow';
+        } else {
+          btn.className = 'sort-chip px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-semibold text-[11px] transition';
+        }
+      });
+
+      // Update table header sort arrows
+      ['upload_date', 'duration_seconds', 'views', 'outlier_multiplier'].forEach(col => {
+        const iconEl = document.getElementById(`sort-icon-${col}`);
+        if (!iconEl) return;
+        if (col === column) {
+          iconEl.textContent = currentSortDirection === 'desc' ? '▼' : '▲';
+          iconEl.className = 'text-indigo-400 font-bold';
+        } else {
+          iconEl.textContent = '↕';
+          iconEl.className = 'text-slate-600';
+        }
+      });
+
+      // Sort array
+      const sorted = [...activeChannelVideos].sort((a, b) => {
+        let valA = a[column];
+        let valB = b[column];
+
+        if (valA === null || valA === undefined) valA = 0;
+        if (valB === null || valB === undefined) valB = 0;
+
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          return currentSortDirection === 'desc'
+            ? valB.localeCompare(valA)
+            : valA.localeCompare(valB);
+        }
+
+        return currentSortDirection === 'desc' ? (valB - valA) : (valA - valB);
+      });
+
+      renderVideoRows(sorted);
+    }
+
+    function toggleColumnSort(column) {
+      applySort(column);
+    }
+
+    function renderVideoRows(videos) {
+      channelVideosTbody.innerHTML = '';
+      if (!videos || videos.length === 0) {
+        channelVideosTbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400">No videos found for this channel.</td></tr>`;
+        return;
+      }
+
+      videos.forEach(v => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-900/60 transition-colors";
+
+        const badgeStyle = v.tier === 1 
+          ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+          : (v.tier === 2 
+              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+              : (v.tier === 3 
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                  : 'bg-slate-700/20 text-slate-400 border-slate-700/30'));
+
+        const safeTitle = escapeHtml(v.title);
+        const safeUrl = escapeHtml(v.url);
+        const safeThumb = escapeHtml(v.thumbnail);
+        const safeId = escapeHtml(v.id);
+
+        tr.innerHTML = `
+          <td class="py-3 px-4">
+            <div class="flex items-center gap-3">
+              <div class="w-16 h-10 rounded-lg bg-slate-900 overflow-hidden shrink-0 relative">
+                <img src="${safeThumb}" alt="" class="w-full h-full object-cover">
+              </div>
+              <div class="min-w-0 max-w-sm">
+                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="font-semibold text-white hover:text-sky-400 line-clamp-2 text-xs leading-snug">
+                  ${safeTitle}
+                </a>
+              </div>
+            </div>
+          </td>
+          <td class="py-3 px-4 text-xs text-slate-400 whitespace-nowrap">
+            ${formatDate(v.upload_date)}
+          </td>
+          <td class="py-3 px-4 text-xs text-slate-400 whitespace-nowrap">
+            ${v.duration_formatted}
+          </td>
+          <td class="py-3 px-4 text-xs font-bold text-slate-200 whitespace-nowrap">
+            ${formatNumber(v.views)}
+          </td>
+          <td class="py-3 px-4 whitespace-nowrap">
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${badgeStyle}">
+              ${v.tier <= 2 ? '<i data-lucide="flame" class="w-3 h-3"></i>' : ''}
+              ${v.outlier_multiplier}x ${escapeHtml(v.badge)}
+            </span>
+          </td>
+          <td class="py-3 px-4 text-right whitespace-nowrap">
+            <div class="flex items-center justify-end gap-1.5">
+              <button
+                type="button"
+                class="btn-clip-outlier px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1 shadow-md shadow-indigo-600/20 transition"
+                data-url="${safeUrl}"
+                data-title="${safeTitle}"
+              >
+                <i data-lucide="zap" class="w-3.5 h-3.5 text-yellow-300"></i>
+                <span>Clip Video</span>
+              </button>
+              <button
+                type="button"
+                class="btn-inspect-hook px-2 py-1.5 rounded-lg bg-sky-600/20 hover:bg-sky-600/40 text-sky-300 border border-sky-500/30 text-xs font-medium transition"
+                data-id="${safeId}"
+              >
+                Hook
+              </button>
+              <button
+                type="button"
+                class="btn-clone-style px-2 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 text-xs font-medium transition"
+                data-title="${safeTitle}"
+              >
+                Model
+              </button>
+            </div>
+          </td>
+        `;
+
+        tr.querySelector('.btn-clip-outlier').addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          sendVideoToClipper(v.url, v.title);
+        });
+
+        tr.querySelector('.btn-inspect-hook').addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const vidId = e.currentTarget.getAttribute('data-id');
+          if (!vidId) return;
+          document.getElementById('video-input').value = vidId;
+          switchNicheSubTab('subtab-hook');
+          executeHookAnalysis(vidId);
+        });
+
+        tr.querySelector('.btn-clone-style').addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const vidTitle = e.currentTarget.getAttribute('data-title');
+          document.getElementById('gen-niche').value = vidTitle;
+          document.getElementById('gen-channel-name').value = (activeChannelData && activeChannelData.channel_name) || '';
+          switchNicheSubTab('subtab-ideas');
+          executeIdeaGeneration(vidTitle, (activeChannelData && activeChannelData.channel_name) || '');
+        });
+
+        channelVideosTbody.appendChild(tr);
+      });
+
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function renderChannelResults(data) {
+      document.getElementById('ch-title').textContent = data.channel_name || 'Channel';
+      document.getElementById('ch-sub-url').textContent = data.channel_url || '';
+      document.getElementById('stat-subs').textContent = formatNumber(data.subscribers);
+      document.getElementById('stat-median').textContent = formatNumber(data.stats.median_views);
+      document.getElementById('stat-max').textContent = formatNumber(data.stats.max_views);
+      document.getElementById('stat-outliers').textContent = `${data.stats.outlier_count} hits`;
+      
+      const subEl = document.getElementById('stat-outliers-sub');
+      if (subEl) {
+        subEl.textContent = `Top: ${data.stats.top_multiplier || 1.0}x`;
+      }
+
+      const legendMedian = document.getElementById('chart-legend-median');
+      if (legendMedian) {
+        legendMedian.textContent = formatNumber(data.stats.median_views);
+      }
+
+      activeOutlierTitles = (data.outliers || []).map(o => o.title);
+      activeChannelVideos = data.videos || [];
+
+      renderChannelChart(activeChannelVideos, data.stats.median_views);
+
+      // Default sorting: High-to-Low by Outlier Multiplier
+      applySort('outlier_multiplier', 'desc');
+
+      channelResultsContainer.classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+
+    // --- TAB 3: HOOK DECONSTRUCTOR ---
+    const formHookAnalyze = document.getElementById('form-hook-analyze');
+    const videoInput = document.getElementById('video-input');
+    const hookResultsContainer = document.getElementById('hook-results-container');
+    const hookLoading = document.getElementById('hook-loading');
+
+    async function executeHookAnalysis(vid) {
+      if (!vid) return;
+
+      hookResultsContainer.classList.add('hidden');
+      hookLoading.classList.remove('hidden');
+      currentActiveVideoId = vid;
+
+      try {
+        const res = await fetch('/api/niche/video-hook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ video_id: vid })
+        });
+        const data = await res.json();
+
+        hookLoading.classList.add('hidden');
+
+        if (!data.success) {
+          showToast(data.error || 'Failed to analyze video transcript.');
+          return;
+        }
+
+        if (!data.analysis.available) {
+          showToast(data.analysis.error || 'No transcript available for this video.');
+          return;
+        }
+
+        renderHookAnalysis(data.analysis, data.transcript, data.video_id);
+      } catch (err) {
+        hookLoading.classList.add('hidden');
+        showToast('Error deconstructing hook: ' + err.message);
+      }
+    }
+
+    if (formHookAnalyze) {
+      formHookAnalyze.addEventListener('submit', (e) => {
+        e.preventDefault();
+        executeHookAnalysis(videoInput.value.trim());
+      });
+    }
+
+    function renderHookAnalysis(analysis, rawTranscript, vidId) {
+      currentHookText = analysis.hook_text || "";
+      currentFullTranscript = rawTranscript.full_text || "";
+      currentActiveVideoId = vidId || currentActiveVideoId;
+
+      document.getElementById('hook-stat-wpm').innerHTML = `${analysis.hook_wpm} <span class="text-xs font-normal text-slate-400">WPM</span>`;
+      document.getElementById('hook-stat-pacing-rating').textContent = analysis.pacing_rating;
+      document.getElementById('hook-stat-duration').innerHTML = `${analysis.hook_duration_seconds} <span class="text-xs font-normal text-slate-400">sec</span>`;
+      document.getElementById('hook-stat-density').innerHTML = `${analysis.words_per_sentence} <span class="text-xs font-normal text-slate-400">w/sent</span>`;
+      document.getElementById('hook-stat-readability').textContent = analysis.readability_level;
+      document.getElementById('hook-stat-total-words').textContent = Number(analysis.total_transcript_words).toLocaleString();
+      document.getElementById('hook-stat-runtime').textContent = `~${analysis.total_duration_minutes} min runtime (${analysis.overall_wpm} avg WPM)`;
+
+      const fwContainer = document.getElementById('hook-frameworks-list');
+      fwContainer.innerHTML = '';
+      (analysis.hook_frameworks || []).forEach(fw => {
+        const span = document.createElement('div');
+        span.className = "px-3 py-1.5 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-xs";
+        span.innerHTML = `<span class="font-bold text-indigo-300">${escapeHtml(fw.name)}:</span> <span class="text-slate-300">${escapeHtml(fw.desc)}</span>`;
+        fwContainer.appendChild(span);
+      });
+
+      document.getElementById('hook-script-box').textContent = analysis.hook_text || "No spoken words in first 60 seconds.";
+
+      const snippetsBox = document.getElementById('transcript-snippets-container');
+      snippetsBox.innerHTML = '';
+      (rawTranscript.snippets || []).forEach(s => {
+        const div = document.createElement('div');
+        div.className = "flex gap-3 hover:bg-slate-900 p-1.5 rounded";
+        div.innerHTML = `
+          <span class="text-slate-500 font-mono shrink-0 w-12">${formatSeconds(s.start)}</span>
+          <span class="text-slate-300">${escapeHtml(s.text)}</span>
+        `;
+        snippetsBox.appendChild(div);
+      });
+
+      hookResultsContainer.classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    // Clip hook video button
+    const btnClipHookVideo = document.getElementById('btn-clip-hook-video');
+    if (btnClipHookVideo) {
+      btnClipHookVideo.addEventListener('click', (e) => {
+        e.preventDefault();
+        const vid = (currentActiveVideoId || '').trim();
+        const url = vid.startsWith('http') ? vid : `https://www.youtube.com/watch?v=${vid}`;
+        sendVideoToClipper(url, 'Hook Video');
+      });
+    }
+
+    // Copy hook text
+    document.getElementById('btn-copy-hook').addEventListener('click', (e) => {
+      e.preventDefault();
+      if (currentHookText) {
+        navigator.clipboard.writeText(currentHookText);
+        showToast('Opening Hook copied to clipboard! 📋');
+      }
+    });
+
+    document.getElementById('btn-copy-full-transcript').addEventListener('click', (e) => {
+      e.preventDefault();
+      if (currentFullTranscript) {
+        navigator.clipboard.writeText(currentFullTranscript);
+        showToast('Full transcript copied to clipboard! 📋');
+      }
+    });
+
+
+    // --- TAB 4: VIRAL TOPIC & STYLE CLONER ---
+    const formGenerateIdeas = document.getElementById('form-generate-ideas');
+    const genNicheInput = document.getElementById('gen-niche');
+    const genChannelNameInput = document.getElementById('gen-channel-name');
+    const ideasResultsContainer = document.getElementById('ideas-results-container');
+    const ideasGrid = document.getElementById('ideas-grid');
+    const ideasLoading = document.getElementById('ideas-loading');
+
+    async function executeIdeaGeneration(niche, chName) {
+      if (!niche) return;
+
+      ideasResultsContainer.classList.add('hidden');
+      ideasLoading.classList.remove('hidden');
+
+      const apiKey = localStorage.getItem('tg_gemini_key') || '';
+
+      try {
+        const res = await fetch('/api/niche/ideas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channel_name: chName || 'Target Channel',
+            niche: niche,
+            outlier_titles: activeOutlierTitles,
+            api_key: apiKey
+          })
+        });
+        const data = await res.json();
+
+        ideasLoading.classList.add('hidden');
+
+        if (!data.success) {
+          showToast(data.error || 'Failed to generate viral ideas.');
+          return;
+        }
+
+        renderIdeas(data.ideas);
+      } catch (err) {
+        ideasLoading.classList.add('hidden');
+        showToast('Error generating ideas: ' + err.message);
+      }
+    }
+
+    if (formGenerateIdeas) {
+      formGenerateIdeas.addEventListener('submit', (e) => {
+        e.preventDefault();
+        executeIdeaGeneration(genNicheInput.value.trim(), genChannelNameInput.value.trim());
+      });
+    }
+
+    function renderIdeas(ideas) {
+      ideasGrid.innerHTML = '';
+      if (!Array.isArray(ideas) || ideas.length === 0) {
+        ideasGrid.innerHTML = `<div class="col-span-full py-8 text-center text-slate-400">No ideas could be generated.</div>`;
+        ideasResultsContainer.classList.remove('hidden');
+        return;
+      }
+
+      ideas.forEach((item, index) => {
+        const card = document.createElement('div');
+        card.className = "glass-card rounded-2xl p-5 space-y-4 hover:border-purple-500/50 transition-all shadow-lg flex flex-col justify-between border-slate-800";
+
+        const safeTitle = escapeHtml(item.title);
+        const safeThumb = escapeHtml(item.thumbnail_concept);
+        const safeHook = escapeHtml(item.hook_script);
+        const safeRationale = escapeHtml(item.outlier_rationale);
+
+        card.innerHTML = `
+          <div class="space-y-3">
+            <div class="flex items-start justify-between gap-3">
+              <span class="text-xs font-bold text-purple-400 uppercase tracking-wider">Concept #${index + 1}</span>
+              <button type="button" class="btn-copy-idea text-xs text-slate-400 hover:text-white flex items-center gap-1 transition">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy Package
+              </button>
+            </div>
+
+            <h4 class="font-extrabold text-white text-sm sm:text-base leading-snug">${safeTitle}</h4>
+
+            <!-- Thumbnail Blueprint -->
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+              <span class="text-[10px] uppercase font-bold text-amber-400 flex items-center gap-1">
+                <i data-lucide="image" class="w-3 h-3"></i> Thumbnail Blueprint
+              </span>
+              <p class="text-xs text-slate-300 leading-relaxed">${safeThumb}</p>
+            </div>
+
+            <!-- Opening Hook Script -->
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+              <span class="text-[10px] uppercase font-bold text-emerald-400 flex items-center gap-1">
+                <i data-lucide="mic" class="w-3 h-3"></i> Opening Retention Hook (45s)
+              </span>
+              <p class="text-xs text-slate-200 font-mono leading-relaxed whitespace-pre-wrap">${safeHook}</p>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center gap-1.5">
+            <i data-lucide="info" class="w-3.5 h-3.5 text-slate-500 shrink-0"></i>
+            <span>${safeRationale}</span>
+          </div>
+        `;
+
+        card.querySelector('.btn-copy-idea').addEventListener('click', (e) => {
+          e.preventDefault();
+          const fullPackage = `TITLE: ${item.title}\n\nTHUMBNAIL CONCEPT:\n${item.thumbnail_concept}\n\nOPENING HOOK SCRIPT:\n${item.hook_script}\n\nSTRATEGY:\n${item.outlier_rationale}`;
+          navigator.clipboard.writeText(fullPackage);
+          showToast(`Concept #${index + 1} copied to clipboard! 📋`);
+        });
+
+        ideasGrid.appendChild(card);
+      });
+
+      ideasResultsContainer.classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+
+    // --- INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) lucide.createIcons();
+      loadClips();
+    });
+  </script>
+</body>
+</html>

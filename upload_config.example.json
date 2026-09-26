@@ -1,0 +1,20 @@
+{
+  "youtube": {
+    "client_secrets_file": "client_secrets.json",
+    "token_file": "youtube_token.json",
+    "is_authenticated": false,
+    "channel_title": "",
+    "channel_id": ""
+  },
+  "ayrshare": {
+    "api_key": "",
+    "is_configured": false
+  },
+  "auto_upload": {
+    "enabled": false,
+    "platforms": [
+      "youtube"
+    ],
+    "default_privacy": "public"
+  }
+}
