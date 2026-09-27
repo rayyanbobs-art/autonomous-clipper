@@ -9,9 +9,9 @@
 * **🧠 AI Virality Scoring & Critique Gate:** Analyzes speech density, emotional triggers, and standalone narrative coherence to detect the top moments in any long-form video.
 * **🎯 3 Smart Framing Modes:**
   * **Blurred 9:16:** Cinematic blurred canvas keeping the full original frame in focus.
-  * **Smart Face Tracking:** OpenCV Haar cascade face centering with smooth moving-average crop stabilization.
+  * **Smart Face Tracking:** OpenCV **YuNet** (`FaceDetectorYN`) face detection with smooth moving-average crop stabilization. Requires the ONNX model — see [Face tracking model](#-face-tracking-model).
   * **Split Gaming:** Top facecam + bottom gameplay stack specifically designed for stream recordings and Let's Plays.
-* **🎨 10 Animated Subtitle Presets:** Hormozi Pop (Yellow/White), Beast (Electric Yellow), Kinetic Pop (TikTok style), Netflix Standard, BBC SDH Broadcast Box, Cinematic Auteur Serif, Cyber Green, Red Punch, and Clean White.
+* **🎨 13 Animated Subtitle Presets:** Hormozi Pop (Yellow/White), Beast (Electric Yellow), Kinetic Pop (TikTok style), Netflix Standard, BBC SDH Broadcast Box, Cinematic Auteur Serif, Cyber Green, Red Punch, Clean White, Karaoke, Boxed Clean, Minimal Caption, and Bold Pop (default).
 * **🎬 Autonomous Video Polish:**
   * **Dynamic B-Roll Overlays:** Automatic keyword-triggered contextual stock footage.
   * **Emoji Popups:** Keyword-synced reaction emojis positioned above speaker dialogue.
@@ -44,8 +44,8 @@
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/autoshorts-ai.git
-cd autoshorts-ai
+git clone https://github.com/rayyanbobs-art/autonomous-clipper.git
+cd autonomous-clipper
 ```
 
 ### 2. Install Dependencies
@@ -53,12 +53,52 @@ cd autoshorts-ai
 pip install -r requirements.txt
 ```
 
-### 3. Launch the Web Studio
+> **Note on `faster-whisper`:** this pulls in a large CTranslate2 runtime (~2 GB).
+> It is only needed for word-level caption timing. If you are happy with
+> cue-level subtitles, remove it from `requirements.txt` and supply an SRT/VTT
+> transcript instead.
+
+### 3. Face Tracking Model
+
+`smart_face` framing needs the YuNet detector, which is **not** committed
+(binary, ~340 KB). Download it once into `models/`:
+
+```bash
+mkdir -p models
+curl -L -o models/face_detection_yunet_2023mar.onnx \
+  https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx
+```
+
+The other two framing modes (`blurred`, `split_gaming`) work without it, but
+`split_gaming` still calls the face tracker to place the facecam box.
+
+### 4. Configure (optional)
+
+Copy the environment template and fill in whatever you need:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Needed for |
+|---|---|
+| `JEV_API_KEY` | AI virality scoring and the title/tag engine |
+| `PEXELS_API_KEY` | Automatic B-roll footage ([free key](https://www.pexels.com/api/)) |
+| `GEMINI_API_KEY` | Niche idea blueprints (falls back to templates without it) |
+| `AYRSHARE_API_KEY` | TikTok / Instagram Reels publishing |
+
+YouTube credentials are **not** environment variables — see
+[Social Accounts & Auto-Upload Setup](#-social-accounts--auto-upload-setup).
+
+### 5. Launch the Web Studio
 ```bash
 # On Windows, you can double-click Launch_Clipper.bat, or run:
 python app.py
 ```
 Open your browser to: **`http://127.0.0.1:5000`**
+
+> The local server binds to `127.0.0.1` and has **no authentication**. Do not
+> expose it to a network you do not control.
 
 ---
 
@@ -106,14 +146,14 @@ python clipper.py --url "https://www.youtube.com/watch?v=VIDEO_ID" --top 3 --can
 ## 📁 Repository Structure
 
 ```
-autoshorts-ai/
+autonomous-clipper/
 ├── app.py                      # Flask Web Studio server & REST API
 ├── clipper.py                  # Core autonomous video clipping pipeline
 ├── title_tag_engine.py         # Jev viral title hook & hashtag engine
 ├── uploader.py                 # YouTube OAuth & Ayrshare publishing dispatcher
 ├── video_cutter.py             # FFmpeg filtergraph rendering engine
 ├── scorer.py                   # Speech transcript windowing & virality scoring
-├── face_tracker.py             # OpenCV Haar-cascade smart face tracking
+├── face_tracker.py             # OpenCV YuNet smart face tracking
 ├── subtitles.py                # Audio-synced timed text & ASS subtitle styles
 ├── broll_engine.py             # Contextual B-roll footage downloader
 ├── batch_rerender.py           # Batch re-rendering utility
@@ -122,6 +162,7 @@ autoshorts-ai/
 ├── niche_scraper.py            # YouTube transcript and channel scraper
 ├── templates/
 │   └── index.html              # Modern Web Studio UI (Tailwind + Lucide)
+├── models/                     # Face detector ONNX (git ignored, see setup)
 ├── output/                     # Rendered MP4 shorts & JSON metadata (git ignored)
 ├── temp/                       # Temporary audio/video working caches (git ignored)
 ├── .env.example                # Environment variable template
@@ -135,12 +176,31 @@ autoshorts-ai/
 
 ## 🧪 Running Tests
 
-To run the full unit and integration test suite:
-
 ```bash
-python test_title_and_uploader.py -v
-python test_confirmed_bugs_fixes.py -v
+python -m unittest discover -p "test_*.py" -v
 ```
+
+The suite is `unittest`-only (no `pytest` required) and takes roughly 2–3
+minutes, most of it real FFmpeg work in `test_speed_clipper.py`.
+
+> ⚠️ **Before running the full suite:** `test_title_and_uploader.py` contains a
+> Flask endpoint test that writes to your real `upload_config.json` (it does not
+> patch `UPLOAD_CONFIG_PATH` the way `test_05` does). Back up the file first, or
+> run that module on its own and check your upload settings afterwards.
+>
+> `test_jev_features.py` and `test_niche_integration.py` make **live network
+> calls** (the Jev API, YouTube). `test_jev_features.py` needs a paid
+> `JEV_API_KEY` and will fail while that service is unavailable.
+
+Which tests are worth trusting:
+
+| File | Verdict |
+|---|---|
+| `test_subtitles_taxonomy.py` | Solid — pure functions, no I/O, mutation-verified |
+| `test_jev_features.py` (tests 01, 02, 04, 05) | Solid — real calls, real thresholds |
+| `test_title_and_uploader.py` (01–05) | Reasonable pure-function tests of the title engine |
+| `test_confirmed_bugs_fixes.py` | **Mixed** — 02, 03 and 04 re-implement the logic they claim to cover and never call it; treat those three as unverified |
+| `test_speed_clipper.py` | Real FFmpeg, but leaves ~94 MB in `temp/` each run and hardcodes a local path |
 
 ---
 
