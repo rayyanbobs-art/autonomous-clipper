@@ -5,6 +5,20 @@ import requests
 from typing import List, Dict, Any, Tuple, Optional
 from pathlib import Path
 from config import get_jev_api_key, JEV_ENDPOINT
+from hashtag_engine import build_hashtags, build_metadata_tags
+from topic_engine import classify_niche, mine_topic_phrases, NICHE_TAGS
+from title_seo import generate_seo_titles, validate_title, _rotation_for
+from title_master_prompt import (
+    generate_master_titles,
+    rank_titles_locally,
+    build_master_prompt,
+    build_clip_topics,
+    merge_topic_pools,
+    extract_hook_text,
+    select_short_title,
+    build_description,
+    DEFAULT_TONE,
+)
 
 # Stopwords & filler tokens to suppress when extracting core topic entities
 COMMON_STOPWORDS = {
@@ -41,18 +55,6 @@ NICHE_KEYWORDS = {
     "motivation_mindset": ["mindset", "discipline", "success", "habits", "focus", "goal", "hard work", "productive", "advice", "life", "stoic", "motivation", "wisdom"]
 }
 
-NICHE_HASHTAGS = {
-    "gaming": ["#gaming", "#gamingshorts", "#gamer", "#gameplay", "#pcgaming", "#gamingcommunity"],
-    "outdoors_survival": ["#outdoors", "#survival", "#bushcraft", "#camping", "#wilderness", "#adventure"],
-    "tech_ai": ["#tech", "#ai", "#artificialintelligence", "#software", "#coding", "#techtok"],
-    "business_money": ["#business", "#money", "#entrepreneur", "#finance", "#wealth", "#investing"],
-    "fitness_health": ["#fitness", "#gym", "#workout", "#health", "#bodybuilding", "#fitnesstips"],
-    "comedy_entertainment": ["#comedy", "#funny", "#humor", "#viral", "#entertainment", "#relatable"],
-    "science_education": ["#science", "#facts", "#didyouknow", "#education", "#learning", "#curiosity"],
-    "motivation_mindset": ["#motivation", "#mindset", "#discipline", "#success", "#selfgrowth", "#inspiration"],
-    "general_viral": ["#shorts", "#viral", "#trending", "#fyp", "#explore", "#shortsfeed"]
-}
-
 
 COMMON_FIRST_NAMES = {
     "luke", "tommy", "nate", "john", "jack", "mike", "dave", "chris", "alex", "sam", "dan",
@@ -67,6 +69,69 @@ SENTENCE_STARTERS = {
     "tonight", "tomorrow", "yesterday", "welcome", "everyone", "guys", "folks", "people",
     "somebody", "nobody", "everybody", "someone", "something", "maybe", "first", "second"
 }
+
+# High-frequency verbs, adjectives and adverbs. These are the words that made the old bigram
+# rule invent junk entities ("year supply", "real reason") that then became bogus hashtags.
+NON_ENTITY_WORDS = {
+    "get", "gets", "got", "getting", "go", "goes", "going", "went", "gone", "make", "makes",
+    "making", "made", "take", "takes", "taking", "took", "taken", "come", "comes", "coming",
+    "came", "know", "knows", "knew", "known", "knowing", "think", "thinks", "thought",
+    "want", "wants", "wanted", "need", "needs", "needed", "use", "uses", "used", "using",
+    "work", "works", "worked", "working", "try", "tries", "tried", "trying", "start",
+    "starts", "started", "starting", "turn", "turns", "turned", "put", "puts", "putting",
+    "keep", "keeps", "kept", "keeping", "let", "lets", "help", "helps", "helped", "become",
+    "becomes", "became", "show", "shows", "showed", "see", "sees", "saw", "seen", "look",
+    "looks", "looked", "say", "says", "said", "find", "finds", "found", "leave", "leaves",
+    "left", "put", "tell", "tells", "told", "ask", "asks", "asked", "seem", "seems",
+    "seemed", "feel", "feels", "felt", "happen", "happens", "happened", "guy", "guys",
+    "big", "small", "huge", "tiny", "great", "good", "bad", "best", "worst", "right",
+    "wrong", "real", "true", "false", "full", "empty", "new", "old", "young", "fast",
+    "slow", "easy", "hard", "long", "short", "high", "low", "own", "same", "different",
+    "other", "another", "every", "many", "much", "more", "most", "less", "least",
+    "very", "really", "quite", "rather", "almost", "always", "never", "often", "sometimes",
+    "actually", "basically", "literally", "probably", "maybe", "anyway", "however",
+    "still", "already", "even", "also", "back", "down", "over", "under", "again",
+    "before", "after", "around", "through", "during", "without", "within", "across",
+    "everywhere", "somewhere", "anywhere", "definitely", "probably", "certainly"
+}
+
+_DOMAIN_TERMS = {
+    kw.lower()
+    for kw_list in NICHE_KEYWORDS.values()
+    for kw in kw_list
+}
+
+
+def _is_domain_term(word_lower: str) -> bool:
+    """True when the token is a recognised domain keyword for any tracked niche."""
+    if word_lower in _DOMAIN_TERMS:
+        return True
+    return any(len(tok) > 2 and tok in word_lower for tok in _DOMAIN_TERMS if " " in tok)
+
+
+def _entity_to_tag(entity: str) -> Optional[str]:
+    """
+    Converts a scored entity into a single valid hashtag token.
+
+    A multi-word entity used to be space-stripped into one unbroken string, producing
+    fabricated tags such as #athleticgreens and #yearsupply. Only ONE real word is used now:
+    the head of the phrase (its last content word), falling back to the longest content word.
+    """
+    tokens = [t for t in re.findall(r"[A-Za-z0-9]+", entity or "") if len(t) > 2]
+    if not tokens:
+        return None
+
+    content = [t for t in tokens if t.lower() not in COMMON_STOPWORDS and t.lower() not in NON_ENTITY_WORDS]
+    if not content:
+        return None
+
+    # Head of the phrase = its last content word ("Snow Cave" -> #cave, "Hot Tent" -> #tent)
+    chosen = content[-1]
+    if len(chosen) < 3:
+        chosen = max(content, key=len)
+    if len(chosen) < 3:
+        return None
+    return f"#{chosen.lower()}"
 
 
 def clean_transcript_text(text: str) -> str:
@@ -103,15 +168,27 @@ def extract_topical_entities(text: str) -> List[Tuple[str, float]]:
             if re.search(r"\b" + re.escape(kw) + r"\b", text_lower):
                 scores[kw.title()] = scores.get(kw.title(), 0.0) + 7.0
 
-    # 3. High-signal multi-word phrases (e.g. "Outdoor Boys", "Snow Cave", "Hot Tent", "Toboggan Run", "Issue Triage")
+    # 3. Lowercase compound domain terms (e.g. "cold start", "hot tent").
+    #    The old version fired on ANY adjacent pair of non-stopwords with the highest weight
+    #    of any rule (8.5), which invented junk entities ("year supply", "real reason") that
+    #    then outranked real proper nouns and became broken hashtags. A compound is now only
+    #    accepted when at least one word is a recognised domain keyword, and it scores BELOW
+    #    a single proper noun.
     words = re.findall(r"\b[a-zA-Z0-9_\-']+\b", cleaned)
     for i in range(len(words) - 1):
         w1, w2 = words[i].lower().strip("'"), words[i + 1].lower().strip("'")
-        if (w1 not in COMMON_STOPWORDS and w2 not in COMMON_STOPWORDS and 
-            w1 not in SENTENCE_STARTERS and len(w1) > 2 and len(w2) > 2 and
-            w1 not in {"ve", "re", "ll", "got", "let"} and w2 not in {"ve", "re", "ll", "got", "let"}):
-            bigram = f"{words[i].capitalize()} {words[i + 1].capitalize()}"
-            scores[bigram] = scores.get(bigram, 0.0) + 8.5
+        if not (len(w1) > 2 and len(w2) > 2):
+            continue
+        if (w1 in COMMON_STOPWORDS or w2 in COMMON_STOPWORDS or
+                w1 in SENTENCE_STARTERS or w2 in SENTENCE_STARTERS or
+                w1 in NON_ENTITY_WORDS or w2 in NON_ENTITY_WORDS or
+                w1.isdigit() or w2.isdigit()):
+            continue
+        # Require a domain anchor so generic verb+noun pairs are never promoted.
+        if not _is_domain_term(w1) and not _is_domain_term(w2):
+            continue
+        bigram = f"{words[i]} {words[i + 1]}"
+        scores[bigram] = scores.get(bigram, 0.0) + 7.6
 
     # 4. Multi-word Proper Noun phrases (e.g. "Outdoor Boys", "Elden Ring")
     multi_proper = re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b", cleaned)
@@ -125,7 +202,7 @@ def extract_topical_entities(text: str) -> List[Tuple[str, float]]:
     single_proper = re.findall(r"\b[A-Z][a-z]{2,}\b", cleaned)
     for p in single_proper:
         lower_p = p.lower()
-        if lower_p not in COMMON_STOPWORDS and lower_p not in SENTENCE_STARTERS:
+        if lower_p not in COMMON_STOPWORDS and lower_p not in SENTENCE_STARTERS and lower_p not in NON_ENTITY_WORDS:
             weight = 2.0 if lower_p in COMMON_FIRST_NAMES else 6.0
             scores[p] = scores.get(p, 0.0) + weight
 
@@ -190,117 +267,139 @@ def classify_niche_heuristic(text: str) -> str:
     return "general_viral"
 
 
-def generate_candidate_titles(transcript_text: str, category: str = "high_value_insight") -> List[Dict[str, str]]:
+def resolve_title_topics(
+    transcript_text: str,
+    video_context: Optional[Dict[str, Any]] = None,
+) -> Tuple[List[str], str]:
     """
-    Generates 5 distinct high-CTR viral candidate titles using proven short-form hook frameworks.
+    The single place the title topic pool is decided. Returns (merged_pool, niche).
+
+    Clip specificity over video coverage. The video pool keeps every clip of one video
+    anchored to the same subject, but for a heterogeneous video it ships wrong titles
+    ("The Proof that Chicken is Real" on a gym clip, video o1_FvfJD8fg). So the clip's
+    own usable topics lead and the video pool fills the remainder. The niche stays
+    video-level -- that is what preserves the 0/11 disagreement property.
+
+    A caller may pre-attach `clip_topics` (mined however it likes); otherwise they are
+    mined here from the clip text the caller already passed. Nothing is read from
+    anywhere else, so the seam property holds: the engine uses caller-supplied context
+    plus the clip text it was handed, and nothing it went and found on its own.
+
+    Both `generate_candidate_titles` and `generate_smart_title_and_hashtags` resolve
+    through here so generation and ranking can never disagree about the pool.
     """
-    cleaned = clean_transcript_text(transcript_text)
-    entities = extract_topical_entities(cleaned)
-    punchy_quote = find_punchy_quote(cleaned)
+    if video_context is None:
+        video_context = build_video_context(transcript_text)
 
-    top_entity = entities[0][0] if entities else "This Secret"
-    sub_entity = entities[1][0] if len(entities) > 1 else ""
+    video_topics = video_context.get("topics") or []
+    niche = video_context.get("niche") or "general_viral"
 
-    KNOWN_LOCATIONS = {"alaska", "japan", "mountains", "forest", "desert", "arctic", "woods", "snow", "wilderness"}
-    top_lower = top_entity.lower()
-    sub_lower = sub_entity.lower() if sub_entity else ""
+    clip_topics = video_context.get("clip_topics")
+    if clip_topics is None:
+        clip_topics = build_clip_topics(transcript_text, niche)
+    return merge_topic_pools(clip_topics, video_topics), niche
 
-    # If top entity is a geographic location and secondary entity is a subject, swap them
-    if top_lower in KNOWN_LOCATIONS and sub_entity and sub_lower not in KNOWN_LOCATIONS:
-        top_entity, sub_entity = sub_entity, top_entity
-        top_lower, sub_lower = sub_lower, top_lower
 
-    niche = classify_niche_heuristic(cleaned)
-    candidates = []
+def generate_candidate_titles(
+    transcript_text: str,
+    category: str = "high_value_insight",
+    video_context: Optional[Dict[str, Any]] = None,
+    *,
+    tone: str = DEFAULT_TONE,
+) -> List[Dict[str, str]]:
+    """
+    Generates 5 validated, SEO-optimised candidate titles for one clip.
 
-    # 1. Curiosity Gap / Mystery Hook
-    if niche == "outdoors_survival":
-        if sub_lower in KNOWN_LOCATIONS:
-            title_curiosity = f"Surviving in {sub_entity} With {top_entity} 🥶"
-        elif top_lower in KNOWN_LOCATIONS:
-            title_curiosity = f"The Secret To Surviving In {top_entity} ❄️"
-        else:
-            title_curiosity = f"Why Nobody Talks About {top_entity}... 😳"
-    elif niche == "tech_ai":
-        title_curiosity = f"Why Nobody Talks About {top_entity} in 2026... ⚡"
-    elif niche == "gaming":
-        title_curiosity = f"The Secret {top_entity} Strat Nobody Uses 🤫"
-    else:
-        title_curiosity = f"Why Nobody Tells You The Truth About {top_entity}... 😳"
-    candidates.append({"id": "curiosity_gap", "framework": "Curiosity Gap", "title": title_curiosity})
+    Previously this produced 5 niche-gated templates filled with a per-clip "entity",
+    62% of which collapsed to "Why Nobody Tells You The Truth About {garbage}" because
+    the entity came from casing-driven proper-noun matching on auto-captions.
+    """
+    if video_context is None:
+        video_context = build_video_context(transcript_text)
 
-    # 2. Pattern Interrupt / Warning Hook
-    if niche == "tech_ai":
-        title_warning = f"STOP Doing This With {top_entity} (Huge Mistake) ❌"
-    elif niche == "gaming":
-        title_warning = f"NEVER Do This If You Want To Beat {top_entity} ❌"
-    elif top_lower in KNOWN_LOCATIONS or sub_lower in KNOWN_LOCATIONS:
-        loc = top_entity if top_lower in KNOWN_LOCATIONS else sub_entity
-        title_warning = f"The Biggest Mistake People Make in {loc} ❌"
-    else:
-        title_warning = f"The Biggest Mistake People Make With {top_entity} ❌"
-    candidates.append({"id": "pattern_interrupt", "framework": "Pattern Interrupt", "title": title_warning})
+    topics, niche = resolve_title_topics(transcript_text, video_context)
+    rotation = _rotation_for(transcript_text)
 
-    # 3. Punchy Spoken Quote Hook
-    if punchy_quote:
-        title_quote = f'"{punchy_quote}" 🤯'
-    else:
-        title_quote = f"I Couldn't Believe What Happened With {top_entity}..."
-    candidates.append({"id": "spoken_quote", "framework": "Spoken Highlight", "title": title_quote})
+    # The master prompt is the primary path. It states the constraints explicitly and its
+    # output is validated by `validate_master_title`, which layers the front-loading,
+    # repeated-word, ellipsis and minimum-real-word rules on top of the publication gate.
+    master = generate_master_titles(
+        topics,
+        niche=niche,
+        limit=5,
+        rotation=rotation,
+        tone=tone,
+    )
+    if len(master) >= 3:
+        return master
 
-    # 4. Shocking Realization / Controversy
-    if niche == "outdoors_survival":
-        if sub_lower in KNOWN_LOCATIONS:
-            title_shock = f"Building In {sub_entity}: The {top_entity} Experiment 🏔️"
-        elif top_lower in KNOWN_LOCATIONS:
-            title_shock = f"Surviving In {top_entity}: What Actually Happened 🏔️"
-        else:
-            title_shock = f"The Real Truth About {top_entity} That Was Hidden 🤯"
-    elif niche == "tech_ai":
-        title_shock = f"How {top_entity} Just Changed The Entire Industry Forever ⚡"
-    elif niche == "gaming":
-        title_shock = f"This Broke Everything We Knew About {top_entity} 🤯"
-    else:
-        title_shock = f"The Real Truth About {top_entity} That Was Hidden 🤯"
-    candidates.append({"id": "shock_revelation", "framework": "Shock / Reveal", "title": title_shock})
+    # Anything shorter means the master prompt's templates did not compose against these
+    # topics. `generate_seo_titles` is kept as a second opinion rather than deleted: it
+    # draws on a different pattern set, so the two fail on different inputs.
+    return generate_seo_titles(
+        topics,
+        niche=niche,
+        category=category,
+        limit=5,
+        rotation=rotation,
+    )
 
-    # 5. Actionable Blueprint / High-Value Guide
-    if niche == "outdoors_survival":
-        if top_lower in KNOWN_LOCATIONS or sub_lower in KNOWN_LOCATIONS:
-            loc = top_entity if top_lower in KNOWN_LOCATIONS else sub_entity
-            title_action = f"How To Survive In {loc} (Step By Step) 🏕️"
-        else:
-            title_action = f"How To Master {top_entity} That Actually Works 🏕️"
-    elif niche == "gaming":
-        title_action = f"How To Master {top_entity} In 30 Seconds 🏆"
-    elif niche in {"tech_ai", "business_money"}:
-        title_action = f"How To Master {top_entity} Like A Pro In 2026 📈"
-    else:
-        title_action = f"The Exact Way To Master {top_entity} (Step By Step) 🚀"
-    candidates.append({"id": "actionable_blueprint", "framework": "Actionable Guide", "title": title_action})
 
-    return candidates
+def _as_float(val: Any, default: float) -> float:
+    """Safe numeric conversion for Jev responses; handles None, strings, and NaN."""
+    if val is None or isinstance(val, bool):
+        return default
+    try:
+        f = float(val)
+        return default if f != f else f
+    except (ValueError, TypeError):
+        return default
 
 
 def score_and_rank_titles_with_jev(
     candidates: List[Dict[str, str]],
     transcript_text: str,
-    api_key: Optional[str] = None
+    api_key: Optional[str] = None,
+    *,
+    topics: Optional[List[str]] = None,
+    hook_text: str = "",
+    visual_context: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, str, float]:
     """
     Submits candidate titles to Jev System One for parallel CTR judgment.
     Returns: (selected_title_id, predicted_niche, confidence)
+
+    WHEN JEV IS UNAVAILABLE, THE BEST CANDIDATE IS NOW ACTUALLY SELECTED.
+
+    Every fallback here used to return `candidates[0]["id"]`, which is the first title in
+    the list and has nothing to do with quality. Five titles were generated, scored by
+    nobody, and the first was published -- the other four were computed and discarded. So
+    the published title was a function of list order, and any change to the generator's
+    ordering silently changed what shipped. `rank_titles_locally` replaces that with a
+    deterministic CTR-proxy score that needs no network and no key.
+
+    `topics`, `hook_text`, and `visual_context` are keyword-only and optional so the existing
+    positional call signature is unchanged; when `topics` is absent the topics are re-mined
+    from the transcript, which is what the caller would have passed anyway.
     """
+    if not candidates:
+        raise ValueError("score_and_rank_titles_with_jev requires at least one candidate")
+
+    resolved_topics = topics
+    if resolved_topics is None:
+        resolved_topics = [p for p, _ in mine_topic_phrases(transcript_text or "", limit=8)]
+
     if not api_key:
         api_key = get_jev_api_key()
 
-    # If no key or offline, fall back to heuristic evaluation
+    # If no key or offline, fall back to deterministic local ranking
     if not api_key:
-        return candidates[0]["id"], classify_niche_heuristic(transcript_text), 0.75
+        best_id, _score = rank_titles_locally(candidates, resolved_topics, hook_text)
+        return best_id, classify_niche_heuristic(transcript_text), 0.75
 
     choice_criteria = {c["id"]: c["title"] for c in candidates}
 
-    questions = {
+    questions: Dict[str, Any] = {
         "best_title_hook": {
             "type": "choice",
             "instructions": "Select the title hook that creates the strongest curiosity gap, emotional urgency, and highest click-through rate (CTR) for YouTube Shorts, TikTok, and Instagram Reels.",
@@ -321,6 +420,10 @@ def score_and_rank_titles_with_jev(
                 "general_viral": "General interest, trending news, storytelling"
             }
         },
+        "clickbait_penalty": {
+            "type": "noul",
+            "instructions": "Is this title misleading, deceptive, or promising something that neither the transcript nor the visuals deliver?"
+        },
         "hook_ctr_potential": {
             "type": "score",
             "instructions": "Rate the overall viral appeal and click-through potential of this clip's spoken hook.",
@@ -333,12 +436,20 @@ def score_and_rank_titles_with_jev(
         }
     }
 
+    state_payload: Dict[str, Any] = {
+        "transcript_snippet": transcript_text[:1200],
+        "title_options": [c["title"] for c in candidates]
+    }
+    if visual_context:
+        state_payload["visual_clip_context"] = visual_context
+        questions["visual_clip_alignment"] = {
+            "type": "noul",
+            "instructions": "Does the highest-ranked title accurately reflect what is physically visible in the real-time visual clip context?"
+        }
+
     payload = {
         "model": "typesafe-ai/jev",
-        "state": {
-            "transcript_snippet": transcript_text[:1200],
-            "title_options": [c["title"] for c in candidates]
-        },
+        "state": state_payload,
         "questions": questions
     }
 
@@ -351,99 +462,170 @@ def score_and_rank_titles_with_jev(
         res = requests.post(JEV_ENDPOINT, json=payload, headers=headers, timeout=8)
         if res.status_code == 200:
             answers = res.json().get("data", {}).get("answers", {})
-            best_id = answers.get("best_title_hook", {}).get("choice", candidates[0]["id"])
-            niche = answers.get("content_niche", {}).get("choice", classify_niche_heuristic(transcript_text))
-            conf = answers.get("best_title_hook", {}).get("confidence", 0.85)
-            return best_id, niche, conf
+            best_id = answers.get("best_title_hook", {}).get("choice")
+            conf = _as_float(answers.get("best_title_hook", {}).get("confidence"), 0.85)
+            clickbait_prob = _as_float(answers.get("clickbait_penalty"), 0.0)
+            visual_prob = _as_float(answers.get("visual_clip_alignment"), 1.0)
+
+            valid_id = bool(best_id and any(c["id"] == best_id for c in candidates))
+
+            # Calibrated Decision Guardrails (Jev Protocol):
+            # 1. Low confidence (< 0.60): Jev decision rule mandates making call locally or falling back
+            # 2. Clickbait penalty: If probability > 0.50, title is deceptive; reject pick
+            # 3. Visual alignment: If visual context was provided and alignment probability < 0.40, visual mismatch; reject pick
+            if valid_id and conf >= 0.60 and clickbait_prob <= 0.50 and visual_prob >= 0.40:
+                niche = answers.get("content_niche", {}).get("choice", classify_niche_heuristic(transcript_text))
+                return best_id, niche, conf
     except Exception:
         pass
 
-    # Resilient fallback: pick first candidate or candidate with highest curiosity heuristic
-    return candidates[0]["id"], classify_niche_heuristic(transcript_text), 0.70
+    # Resilient fallback: deterministic local ranking, not "the first one".
+    best_id, _score = rank_titles_locally(candidates, resolved_topics, hook_text)
+    return best_id, classify_niche_heuristic(transcript_text), 0.70
+
+
+def build_video_context(full_transcript_text: str) -> Dict[str, Any]:
+    """
+    Derives the video-level context used by every clip of one source video.
+
+    Computed ONCE per job from the whole transcript. Previously each ~30 s clip ran its own
+    extraction, so clips of one video disagreed on niche and clip-level topics came out
+    polluted with interjections ("cuz", "though", "guard").
+
+    Measured on the real 11-video / 45-clip corpus:
+
+        per clip, old engine (this module's classify_niche_heuristic)  9/11 disagree
+        per clip, new engine (topic_engine.classify_niche)             4/11 disagree
+        one context per video (this function)                          0/11 disagree
+
+    The three rows measure three different code paths, so quote the right one: the 9/11
+    figure is the pre-fix baseline for the engine that was actually running, the 4/11 is
+    what the improved classifier still does if it is left per clip, and 0/11 is the
+    property this function exists to guarantee.
+    """
+    text = full_transcript_text or ""
+    phrases = mine_topic_phrases(text, limit=8)
+    niche = classify_niche(text)
+    return {
+        "topics": [p for p, _ in phrases],
+        "niche": niche,
+        "niche_tags": list(NICHE_TAGS.get(niche, NICHE_TAGS["general_viral"])),
+    }
 
 
 def generate_smart_title_and_hashtags(
     transcript_text: str,
     category: str = "high_value_insight",
-    api_key: Optional[str] = None
+    api_key: Optional[str] = None,
+    *,
+    video_context: Optional[Dict[str, Any]] = None,
+    tone: str = DEFAULT_TONE,
+    visual_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     End-to-end engine generating viral title and tailored hashtags for YouTube Shorts,
     TikTok, and Instagram Reels using Jev System One decisions and transcript NLP.
+
+    `tone` selects the channel voice ("high_energy", "professional", "playful"); see
+    `title_master_prompt.TONE_PROFILES`. The default reproduces all prior behavior.
+    `visual_context` provides optional real-time video frame/clip metadata (scene, action, OCR)
+    which Jev verifies via visual_clip_alignment.
     """
+    if video_context is None:
+        video_context = build_video_context(transcript_text)
+
     cleaned = clean_transcript_text(transcript_text)
     if not cleaned:
+        # The clip's own text cleaned to nothing -- a stage direction only ("[Music]",
+        # "[Applause]", "(upbeat music)", "[BLANK_AUDIO]" all reduce to ""). That is
+        # reachable: scorer admits any window with a non-empty line list, and a silent or
+        # laughter-only clip has exactly that shape.
+        #
+        # This used to short-circuit with a hardcoded five-tag pad
+        # (`#shorts #viral #trending #fyp #explore`) and a `replace("#", "")` strip of its
+        # own making -- i.e. the OLD engine, still emitting five tags with no relation to
+        # the content, on a path that also THREW AWAY the `video_context` it had just been
+        # handed. That is precisely the bug class Task 5 exists to remove, and because the
+        # path was untested nothing noticed: a mutant that modernised those five tags
+        # passed the entire 261-test suite.
+        #
+        # It now goes through the same engine as every other clip. A silent clip still gets
+        # a generic result -- there is genuinely nothing to say about it -- but it is
+        # derived, it is a consistent size, and if the video's context survived, the niche
+        # and topics are used.
         default_title = "Viral Moment You Need To See 🤯"
-        default_tags = ["#shorts", "#viral", "#trending", "#fyp", "#explore"]
+        topics_for_tags = video_context.get("topics") or []
+        resolved_niche = video_context.get("niche") or "general_viral"
+        default_tags = build_hashtags(topics_for_tags, resolved_niche)
+        raw_tags = build_metadata_tags(default_tags, topics_for_tags, resolved_niche)
+        tag_blob = " ".join(default_tags)
         return {
             "suggested_title": default_title,
             "suggested_hashtags": default_tags,
-            "niche": "general_viral",
+            "niche": resolved_niche,
             "candidates": [{"id": "default", "framework": "Default", "title": default_title}],
             "platform_metadata": {
-                "youtube": {"title": f"{default_title} #shorts", "description": f"{default_title}\n\n{' '.join(default_tags)}", "tags": [t.replace("#", "") for t in default_tags]},
-                "tiktok": {"caption": f"{default_title} {' '.join(default_tags)}"},
-                "instagram": {"caption": f"{default_title}\n.\n.\n{' '.join(default_tags)}"}
+                "youtube": {"title": f"{default_title} #Shorts", "description": f"{default_title}\n\n{tag_blob}", "tags": raw_tags},
+                "tiktok": {"caption": f"{default_title} {tag_blob}"},
+                "instagram": {"caption": f"{default_title}\n.\n.\n{tag_blob}"}
             }
         }
 
-    # 1. Generate 5 diverse candidates
-    candidates = generate_candidate_titles(cleaned, category)
+    # 1. Generate 5 diverse candidates (clip topics lead, video pool fills).
+    candidates = generate_candidate_titles(
+        cleaned, category, video_context=video_context, tone=tone
+    )
 
-    # 2. Evaluate with Jev
-    best_id, niche, conf = score_and_rank_titles_with_jev(candidates, cleaned, api_key)
+    # 2. Evaluate with Jev, or rank locally when Jev is unavailable. Ranked against the
+    # same merged pool the titles were composed from, resolved once through the helper,
+    # with the clip's opening hook so titles describing what the viewer hears first win.
+    title_topics, _ = resolve_title_topics(cleaned, video_context)
+    hook_text = extract_hook_text(cleaned)
+    best_id, niche, conf = score_and_rank_titles_with_jev(
+        candidates, cleaned, api_key, topics=title_topics, hook_text=hook_text,
+        visual_context=visual_context
+    )
 
     # Find the winning candidate title
     winning_cand = next((c for c in candidates if c["id"] == best_id), candidates[0])
     best_title = winning_cand["title"]
 
-    # 3. Generate tailored hashtags
-    niche_tags = NICHE_HASHTAGS.get(niche, NICHE_HASHTAGS["general_viral"])
-    entities = extract_topical_entities(cleaned)
-    
-    entity_tags = []
-    for ent, _ in entities[:3]:
-        clean_tag = re.sub(r"[^a-zA-Z0-9]", "", ent).lower()
-        if clean_tag and len(clean_tag) > 2 and f"#{clean_tag}" not in niche_tags:
-            entity_tags.append(f"#{clean_tag}")
+    # 3. Tags: a short, topic-anchored set. Replaces the 7-tag quota pad.
+    topics_for_tags = video_context.get("topics") or []
+    resolved_niche = video_context.get("niche") or "general_viral"
+    final_hashtags = build_hashtags(topics_for_tags, resolved_niche)
+    raw_tags = build_metadata_tags(final_hashtags, topics_for_tags, resolved_niche)
 
-    # Combine: 2-3 niche tags + 2 entity tags + #shorts #viral
-    combined_tags = []
-    # Always include top niche tags
-    for t in niche_tags[:3]:
-        if t not in combined_tags:
-            combined_tags.append(t)
-    # Add entity tags
-    for t in entity_tags:
-        if t not in combined_tags:
-            combined_tags.append(t)
-    # Ensure #shorts and #viral
-    for base_tag in ["#shorts", "#viral", "#fyp"]:
-        if base_tag not in combined_tags and len(combined_tags) < 7:
-            combined_tags.append(base_tag)
-
-    final_hashtags = combined_tags[:7]
-
-    # 4. Compile platform-specific metadata packages
+    # 4. Platform-specific packaging. YouTube gets the full SEO title; TikTok and
+    # Instagram get the short variant (<= 50 chars, still a validated ranked title,
+    # never a truncation). Descriptions are derived from the FINAL title in one place.
+    short_cand = select_short_title(candidates, title_topics, hook_text)
+    short_title = short_cand["title"]
     yt_title = f"{best_title} #shorts" if "#shorts" not in best_title else best_title
-    yt_desc = (
-        f"{best_title}\n\n"
-        f"\"{cleaned[:180]}...\"\n\n"
-        f"Subscribe for more daily shorts!\n\n"
-        f"{' '.join(final_hashtags)}"
+    yt_desc = build_description(
+        best_title, short_title, title_topics, resolved_niche, hook_text,
+        final_hashtags, snippet_fallback=cleaned, platform="youtube",
     )
-    raw_tags = [t.lstrip("#") for t in final_hashtags]
-
-    tiktok_caption = f"{best_title}\n\n{' '.join(final_hashtags)}"
-    ig_caption = f"{best_title}\n.\n.\n{' '.join(final_hashtags)}"
+    tiktok_caption = build_description(
+        best_title, short_title, title_topics, resolved_niche, hook_text,
+        final_hashtags, platform="tiktok",
+    )
+    ig_body = build_description(
+        best_title, short_title, title_topics, resolved_niche, hook_text,
+        final_hashtags, platform="instagram",
+    )
+    ig_caption = ig_body.replace("\n\n", "\n.\n.\n", 1) if "\n\n" in ig_body else ig_body
 
     return {
         "suggested_title": best_title,
+        "short_title": short_title,
         "suggested_hashtags": final_hashtags,
-        "niche": niche,
+        "niche": resolved_niche,
         "confidence": conf,
         "candidates": candidates,
         "winning_framework": winning_cand["framework"],
+        "hook_text": hook_text,
+        "visual_grounding": bool(visual_context),
         "platform_metadata": {
             "youtube": {
                 "title": yt_title,

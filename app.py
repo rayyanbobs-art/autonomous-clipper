@@ -1,14 +1,22 @@
 import os
 import sys
 import json
+import time
 import uuid
 import threading
 import subprocess
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
-from config import OUTPUT_DIR, get_jev_api_key
-from scorer import create_windows, score_chunk_with_jev, filter_non_overlapping_clips, critique_gate_search
+from typing import Optional, Any
+from config import (
+    OUTPUT_DIR,
+    get_jev_api_key,
+    MIN_CLIP_DURATION,
+    MAX_CLIP_DURATION,
+    CLIP_WINDOW_STEP,
+)
+from scorer import create_windows, critique_gate_search, parse_timestamp_to_seconds
 from video_cutter import cut_and_format_clip
 from clipper import extract_video_id, get_transcript
 from subtitles import SUBTITLE_STYLES
@@ -21,7 +29,8 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-from title_tag_engine import generate_smart_title_and_hashtags
+from title_tag_engine import generate_smart_title_and_hashtags, build_video_context
+from publish_log import build_publication_record, log_publication, default_log_path
 from uploader import (
     load_upload_config, save_upload_config, get_youtube_auth_url,
     exchange_youtube_code, start_youtube_local_auth, upload_clip_to_platforms
@@ -32,22 +41,106 @@ app = Flask(__name__)
 # In-memory job tracker
 JOBS = {}
 
+# Completed/failed jobs are retained for this long so a browser that polls slowly can still
+# read the result. Without eviction, JOBS grows monotonically for the life of the server and
+# each entry retains the full clip metadata (transcript snippets, critique records) forever.
+JOB_RETENTION_SECONDS = 3600
+JOB_MAX_ENTRIES = 200
+
+# In-memory YouTube OAuth handshake tracker (request id -> status/result)
+AUTH_JOBS = {}
+
+
+def _prune_jobs(now: float = None) -> None:
+    """Evicts expired and overflow job entries. Safe to call from any thread."""
+    now = time.time() if now is None else now
+    for job_id in [
+        jid for jid, j in JOBS.items()
+        if isinstance(j.get("_finished_at"), (int, float)) and (now - j["_finished_at"]) > JOB_RETENTION_SECONDS
+    ]:
+        JOBS.pop(job_id, None)
+
+    overflow = len(JOBS) - JOB_MAX_ENTRIES
+    if overflow > 0:
+        # Drop the oldest jobs first.
+        for job_id in sorted(JOBS.keys(), key=lambda jid: JOBS[jid].get("_created_at", 0))[:overflow]:
+            JOBS.pop(job_id, None)
+
+
+_JOBS_LOCK = threading.Lock()
+
+
+def _jobs_manifest_path() -> Path:
+    # Resolved at call time so tests that patch OUTPUT_DIR also redirect the manifest.
+    # Kept in a subfolder: list_clips, batch_rerender and backfill_titles treat every
+    # output/*.json as clip metadata, and their non-recursive globs never see .state/.
+    state_dir = Path(OUTPUT_DIR) / ".state"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    return state_dir / "jobs_manifest.json"
+
+
+def _save_jobs() -> None:
+    """Atomically persists JOBS so status survives a server restart. Never raises:
+    persistence failure must not fail a clipping job."""
+    try:
+        with _JOBS_LOCK:
+            snapshot = {jid: dict(j) for jid, j in list(JOBS.items())}
+            path = _jobs_manifest_path()
+            tmp = path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(snapshot, default=str), encoding="utf-8")
+            os.replace(tmp, path)
+    except Exception as e:
+        print(f"[Jobs] Could not persist job manifest: {e}", flush=True)
+
+
+def _load_jobs() -> None:
+    """Restores JOBS from the manifest. Jobs that were mid-flight when the server died
+    have no worker thread anymore, so they are marked failed instead of polling forever."""
+    try:
+        path = _jobs_manifest_path()
+        if not path.exists():
+            return
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return
+        now = time.time()
+        for jid, job in data.items():
+            if not isinstance(job, dict):
+                continue
+            if job.get("status") not in ("completed", "failed"):
+                job["status"] = "failed"
+                job["error"] = "Server restarted while this job was running. Please start it again."
+                job["step"] = f"Error: {job['error']}"
+                job["_finished_at"] = now
+            JOBS.setdefault(jid, job)
+        _prune_jobs()
+    except Exception as e:
+        print(f"[Jobs] Could not load job manifest: {e}", flush=True)
+
+
+_load_jobs()
+
 def run_clipping_job(
     job_id: str,
     youtube_url: str,
     top_k: int,
     max_candidates: int,
-    subtitle_style: str = "bold_pop",
+    subtitle_style: str = "wild_den",
     threshold: float = 7.0,
     max_attempts: int = 4,
-    enable_broll: bool = True,
-    enable_emojis: bool = True,
-    framing_mode: str = "blurred",
+    enable_broll: bool = False,
+    enable_emojis: bool = False,
+    framing_mode: str = "smart_face",
     enable_snappy_cuts: bool = True,
-    enable_punch_zooms: bool = True,
-    enable_outro: bool = True,
+    enable_punch_zooms: bool = False,
+    enable_outro: bool = False,
     enable_sponsor_killer: bool = True,
-    enable_auto_bleep: bool = False
+    enable_auto_bleep: bool = False,
+    enable_slow_zoom: bool = True,
+    enable_bg_music: bool = False,
+    bg_music_volume: float = 0.12,
+    time_range_start: Optional[Any] = None,
+    time_range_end: Optional[Any] = None
 ):
     try:
         job = JOBS[job_id]
@@ -64,6 +157,10 @@ def run_clipping_job(
         if not transcript:
             raise RuntimeError("No captions or transcript found for this video. Please ensure the video has English captions enabled.")
 
+        # Video-level context: computed ONCE from the whole transcript, then reused by
+        # every clip so titles, niche and hashtags stay consistent across the job.
+        video_context = build_video_context(" ".join(t.get("text", "") for t in transcript))
+
         total_seconds = transcript[-1]["start"] + transcript[-1]["duration"]
         job["progress"] = 25
         job["step"] = f"Analyzing transcript ({len(transcript)} lines, {int(total_seconds // 60)} min runtime)..."
@@ -72,8 +169,18 @@ def run_clipping_job(
         max_attempts = max(1, int(max_attempts))
         max_candidates = max(1, int(max_candidates))
 
-        # Generate candidate windows across transcript
-        candidate_windows = create_windows(transcript, min_duration=28.0, max_duration=55.0, step=25.0)
+        r_start = parse_timestamp_to_seconds(time_range_start)
+        r_end = parse_timestamp_to_seconds(time_range_end)
+
+        # Generate candidate windows across transcript (shared constants -> same windows as the CLI)
+        candidate_windows = create_windows(
+            transcript,
+            min_duration=MIN_CLIP_DURATION,
+            max_duration=MAX_CLIP_DURATION,
+            step=CLIP_WINDOW_STEP,
+            range_start=r_start,
+            range_end=r_end
+        )
         if max_candidates and max_candidates > 0 and len(candidate_windows) > max_candidates:
             stride = len(candidate_windows) / max_candidates
             candidate_windows = [candidate_windows[int(i * stride)] for i in range(max_candidates)]
@@ -91,6 +198,13 @@ def run_clipping_job(
             job["progress"] = min(60, pct)
             job["step"] = f"Clip #{clip_num} - {msg}"
 
+        shortfalls = []
+
+        def on_shortfall(found, requested):
+            shortfalls.append((found, requested))
+            print(f"[Critique Gate] WARNING: requested {requested} clips but only {found} "
+                  f"non-overlapping candidate windows were available.", flush=True)
+
         top_clips = critique_gate_search(
             candidate_windows=candidate_windows,
             target_clips=top_k,
@@ -99,13 +213,23 @@ def run_clipping_job(
             subtitle_style=subtitle_style,
             enable_sponsor_killer=enable_sponsor_killer,
             api_key=api_key,
-            progress_callback=on_critique_progress
+            progress_callback=on_critique_progress,
+            shortfall_callback=on_shortfall
         )
 
         if not top_clips:
             raise RuntimeError("Critique gate could not find high-impact clips.")
 
-        job["step"] = f"Rendering {len(top_clips)} 9:16 vertical Shorts with FFmpeg..."
+        if len(top_clips) < top_k:
+            print(f"[Critique Gate] Only {len(top_clips)}/{top_k} clips cleared the gate.", flush=True)
+
+        # Never silently under-deliver: make the reduced count visible to the user.
+        render_note = ""
+        if shortfalls or len(top_clips) < top_k:
+            render_note = (f" (NOTE: only {len(top_clips)} of {top_k} requested clips were available "
+                           f"after the non-overlap and quality gates.)")
+
+        job["step"] = f"Rendering {len(top_clips)} 9:16 vertical Shorts{render_note} with FFmpeg..."
         completed_clips = []
 
         for rank, clip in enumerate(top_clips, 1):
@@ -129,7 +253,10 @@ def run_clipping_job(
                 enable_snappy_cuts=enable_snappy_cuts,
                 enable_punch_zooms=enable_punch_zooms,
                 enable_outro=enable_outro,
-                enable_auto_bleep=enable_auto_bleep
+                enable_auto_bleep=enable_auto_bleep,
+                enable_slow_zoom=enable_slow_zoom,
+                enable_bg_music=enable_bg_music,
+                bg_music_volume=bg_music_volume
             )
 
             if success and output_mp4.exists():
@@ -137,7 +264,8 @@ def run_clipping_job(
                 critique_info = clip.get("critique", {})
                 smart_meta = generate_smart_title_and_hashtags(
                     transcript_text=clip["text"],
-                    category=clip.get("category", "high_value_insight")
+                    category=clip.get("category", "high_value_insight"),
+                    video_context=video_context
                 )
                 suggested_title = smart_meta.get("suggested_title", f"The brutal truth about {cat_formatted} 🤯")
                 suggested_hashtags = smart_meta.get("suggested_hashtags", ["#shorts", "#viral"])
@@ -169,12 +297,27 @@ def run_clipping_job(
                     "transcript_snippet": clip["text"],
                     "suggested_title": suggested_title,
                     "suggested_hashtags": suggested_hashtags,
-                    "niche": smart_meta.get("niche", "general_viral"),
+                    "niche": video_context.get("niche") or smart_meta.get("niche", "general_viral"),
+                    "seo_topic": (video_context.get("topics") or [None])[0],
+                    # Provenance, explicit. PRESENCE of `seo_topic` used to be read as
+                    # "a producer had the full transcript" -- but backfill_titles.py writes
+                    # the same key from 30 s snippet unions, so the marker became
+                    # self-certifying and stopped meaning anything. State the source.
+                    "seo_topic_source": "full_transcript",
                     "candidate_titles": smart_meta.get("candidates", []),
                     "platform_metadata": smart_meta.get("platform_metadata", {})
                 }
                 with open(meta_json, "w", encoding="utf-8") as f:
                     json.dump(metadata, f, indent=2)
+                log_publication(default_log_path(), build_publication_record(
+                    source="app",
+                    video_id=video_id,
+                    filename=output_mp4.name,
+                    smart_meta=smart_meta,
+                    virality_score=metadata.get("virality_score"),
+                    standalone_probability=metadata.get("standalone_probability"),
+                    sponsor_probability=metadata.get("sponsor_probability"),
+                ))
 
                 completed_clips.append(metadata)
 
@@ -201,14 +344,23 @@ def run_clipping_job(
 
         job["progress"] = 100
         job["status"] = "completed"
-        job["step"] = f"Finished! {len(completed_clips)} viral Shorts are ready."
+        job["step"] = f"Finished! {len(completed_clips)} viral Shorts are ready.{render_note}"
         job["clips"] = completed_clips
+        job["_finished_at"] = time.time()
+        if shortfalls or len(top_clips) < top_k:
+            job["warning"] = (
+                f"Requested {top_k} clips but only {len(completed_clips)} were produced. "
+                f"Non-overlapping candidate windows were exhausted at the current quality threshold."
+            )
+        _save_jobs()
 
     except Exception as e:
         job = JOBS.get(job_id, {})
         job["status"] = "failed"
         job["error"] = str(e)
         job["step"] = f"Error: {str(e)}"
+        job["_finished_at"] = time.time()
+        _save_jobs()
 
 @app.route("/")
 def index():
@@ -217,6 +369,106 @@ def index():
 @app.route("/api/subtitle-styles")
 def get_subtitle_styles():
     return jsonify({"styles": SUBTITLE_STYLES})
+
+def format_seconds_to_timestamp(sec: float) -> str:
+    s = int(round(sec))
+    m = s // 60
+    rem_s = s % 60
+    if m >= 60:
+        h = m // 60
+        rem_m = m % 60
+        return f"{h:02d}:{rem_m:02d}:{rem_s:02d}"
+    return f"{m:02d}:{rem_s:02d}"
+
+@app.route("/api/video/suggest-ranges", methods=["POST"])
+def suggest_ranges():
+    data = request.get_json() or {}
+    url = (data.get("url") or data.get("video_url") or "").strip()
+    if not url:
+        return jsonify({"success": False, "error": "URL is required"}), 400
+
+    try:
+        video_id = extract_video_id(url)
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Invalid YouTube URL: {e}"}), 400
+
+    try:
+        transcript = get_transcript(video_id)
+        if not transcript:
+            return jsonify({"success": False, "error": "No captions available for this video."}), 404
+        total_seconds = float(transcript[-1]["start"] + transcript[-1]["duration"])
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Could not fetch video metadata: {e}"}), 500
+
+    total_int = int(round(total_seconds))
+    mins = total_int // 60
+    secs = total_int % 60
+    formatted_duration = f"{mins}m {secs:02d}s"
+    end_ts = format_seconds_to_timestamp(total_seconds)
+
+    suggestions = [
+        {
+            "label": "Full Video",
+            "start": "00:00",
+            "end": end_ts,
+            "start_sec": 0,
+            "end_sec": total_int,
+        }
+    ]
+
+    if total_seconds >= 120:
+        if total_seconds < 420:
+            half_sec = int(round(total_seconds / 2.0))
+            half_ts = format_seconds_to_timestamp(half_sec)
+            suggestions.append({
+                "label": "First Half",
+                "start": "00:00",
+                "end": half_ts,
+                "start_sec": 0,
+                "end_sec": half_sec,
+            })
+            suggestions.append({
+                "label": "Second Half",
+                "start": half_ts,
+                "end": end_ts,
+                "start_sec": half_sec,
+                "end_sec": total_int,
+            })
+        else:
+            intro_sec = min(300, int(round(total_seconds * 0.25)))
+            climax_sec = max(intro_sec + 60, int(round(total_seconds * 0.65)))
+            
+            intro_ts = format_seconds_to_timestamp(intro_sec)
+            climax_ts = format_seconds_to_timestamp(climax_sec)
+
+            suggestions.append({
+                "label": "Opening / Intro",
+                "start": "00:00",
+                "end": intro_ts,
+                "start_sec": 0,
+                "end_sec": intro_sec,
+            })
+            suggestions.append({
+                "label": "Middle Section",
+                "start": intro_ts,
+                "end": climax_ts,
+                "start_sec": intro_sec,
+                "end_sec": climax_sec,
+            })
+            suggestions.append({
+                "label": "Climax / Ending",
+                "start": climax_ts,
+                "end": end_ts,
+                "start_sec": climax_sec,
+                "end_sec": total_int,
+            })
+
+    return jsonify({
+        "success": True,
+        "total_seconds": round(total_seconds, 1),
+        "formatted_duration": formatted_duration,
+        "suggestions": suggestions
+    })
 
 @app.route("/api/generate", methods=["POST"])
 @app.route("/api/start-autocut", methods=["POST"])
@@ -233,7 +485,7 @@ def generate():
     except (ValueError, TypeError):
         candidates = 15
 
-    subtitle_style = data.get("subtitle_style", "bold_pop")
+    subtitle_style = data.get("subtitle_style", "wild_den")
     try:
         raw_thresh = data.get("threshold", 7.0)
         threshold = float(raw_thresh) if raw_thresh is not None else 7.0
@@ -244,14 +496,23 @@ def generate():
         max_attempts = max(1, int(data.get("max_attempts", 4)))
     except (ValueError, TypeError):
         max_attempts = 4
-    enable_broll = bool(data.get("enable_broll", True))
-    enable_emojis = bool(data.get("enable_emojis", True))
-    framing_mode = str(data.get("framing_mode", "blurred"))
+    enable_broll = bool(data.get("enable_broll", False))
+    enable_emojis = bool(data.get("enable_emojis", False))
+    framing_mode = str(data.get("framing_mode", "smart_face"))
     enable_snappy_cuts = bool(data.get("enable_snappy_cuts", True))
-    enable_punch_zooms = bool(data.get("enable_punch_zooms", True))
-    enable_outro = bool(data.get("enable_outro", True))
+    enable_punch_zooms = bool(data.get("enable_punch_zooms", False))
+    enable_outro = bool(data.get("enable_outro", False))
     enable_sponsor_killer = bool(data.get("enable_sponsor_killer", True))
     enable_auto_bleep = bool(data.get("enable_auto_bleep", False))
+    enable_slow_zoom = bool(data.get("enable_slow_zoom", True))
+    enable_bg_music = bool(data.get("enable_bg_music", False))
+    try:
+        bg_music_volume = float(data.get("bg_music_volume", 0.12))
+    except (ValueError, TypeError):
+        bg_music_volume = 0.12
+
+    time_range_start = data.get("time_range_start")
+    time_range_end = data.get("time_range_end")
 
     if not url:
         return jsonify({"error": "Please provide a valid YouTube video URL."}), 400
@@ -263,12 +524,17 @@ def generate():
         "progress": 0,
         "step": "Queued and starting up with Critique Gate...",
         "clips": [],
-        "error": None
+        "error": None,
+        "_created_at": time.time(),
+        "_finished_at": None
     }
+    _prune_jobs()
+    _save_jobs()
 
     t = threading.Thread(
         target=run_clipping_job,
-        args=(job_id, url, top_k, candidates, subtitle_style, threshold, max_attempts, enable_broll, enable_emojis, framing_mode, enable_snappy_cuts, enable_punch_zooms, enable_outro, enable_sponsor_killer, enable_auto_bleep),
+        args=(job_id, url, top_k, candidates, subtitle_style, threshold, max_attempts, enable_broll, enable_emojis, framing_mode, enable_snappy_cuts, enable_punch_zooms, enable_outro, enable_sponsor_killer, enable_auto_bleep, enable_slow_zoom, enable_bg_music, bg_music_volume),
+        kwargs={"time_range_start": time_range_start, "time_range_end": time_range_end},
         daemon=True
     )
     t.start()
@@ -277,10 +543,20 @@ def generate():
 
 @app.route("/api/status/<job_id>")
 def status(job_id):
+    _prune_jobs()
     job = JOBS.get(job_id)
     if not job:
-        return jsonify({"error": "Job not found"}), 404
-    return jsonify(job)
+        # Terminal payload (not a bare 404) so the browser poller stops instead of hanging.
+        return jsonify({
+            "job_id": job_id,
+            "status": "failed",
+            "progress": 0,
+            "step": "Error: Job expired or not found",
+            "error": "Job expired or not found",
+            "clips": []
+        }), 404
+    # Strip internal bookkeeping fields before serialising to the client.
+    return jsonify({k: v for k, v in job.items() if not k.startswith("_")})
 
 @app.route("/api/clips")
 def list_clips():
@@ -359,10 +635,26 @@ def api_niche_channel():
     try:
         raw_data = get_channel_details(channel_input, max_videos=max_videos)
         analyzed = analyze_channel_outliers(raw_data)
-        return jsonify({
+
+        # Disclose when the requested handle/ID could not be resolved and the data actually
+        # belongs to a search-resolved channel, so the user is never shown one channel's
+        # numbers under another channel's request.
+        warnings = []
+        requested = raw_data.get("requested_input", channel_input)
+        if raw_data.get("resolved_by_search"):
+            warnings.append(
+                f"'{requested}' could not be resolved as a handle or channel ID. "
+                f"Results shown are for '{analyzed.get('channel_name') or raw_data.get('channel_name')}' "
+                f"({raw_data.get('channel_url') or 'unknown URL'})."
+            )
+
+        payload = {
             "success": True,
             "data": analyzed
-        })
+        }
+        if warnings:
+            payload["warnings"] = warnings
+        return jsonify(payload)
     except ValueError as ve:
         return jsonify({"success": False, "error": str(ve)}), 404
     except Exception as e:
@@ -453,24 +745,81 @@ def api_get_upload_config():
 
 @app.route("/api/upload/config", methods=["POST"])
 def api_save_upload_config():
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"success": False, "error": "Request body must be a JSON object."}), 400
     cfg = load_upload_config()
-    
-    if "ayrshare_key" in data and data["ayrshare_key"].strip():
-        cfg["ayrshare"]["api_key"] = data["ayrshare_key"].strip()
-        cfg["ayrshare"]["is_configured"] = True
-        
+
+    if "ayrshare_key" in data:
+        raw_key = data["ayrshare_key"]
+        if not isinstance(raw_key, str):
+            # A JSON null / number is a client bug. It must NOT be treated as "clear the
+            # key", otherwise any form serialiser that emits null for a blank optional field
+            # would silently wipe the stored credential.
+            return jsonify({"success": False,
+                            "error": "'ayrshare_key' must be a string. "
+                                    "Send \"\" to clear the stored key."}), 400
+        key_str = raw_key.strip()
+
+        if key_str:
+            cfg["ayrshare"]["api_key"] = key_str
+            cfg["ayrshare"]["is_configured"] = True
+        else:
+            # Explicit empty value clears the credential so it can be revoked/rotated.
+            cfg["ayrshare"]["api_key"] = ""
+            cfg["ayrshare"]["is_configured"] = False
+
     if "auto_upload" in data:
-        cfg["auto_upload"]["enabled"] = bool(data["auto_upload"].get("enabled", False))
-        cfg["auto_upload"]["platforms"] = data["auto_upload"].get("platforms", ["youtube"])
-        cfg["auto_upload"]["default_privacy"] = data["auto_upload"].get("default_privacy", "public")
-        
-    ok = save_upload_config(cfg)
-    return jsonify({"success": ok})
+        auto = data["auto_upload"]
+        if not isinstance(auto, dict):
+            return jsonify({"success": False, "error": "'auto_upload' must be a JSON object."}), 400
+        platforms = auto.get("platforms", ["youtube"])
+        if isinstance(platforms, str):
+            platforms = [platforms]
+        if not isinstance(platforms, list):
+            return jsonify({"success": False, "error": "'auto_upload.platforms' must be a list of strings."}), 400
+        privacy = auto.get("default_privacy", "public")
+        if not isinstance(privacy, str) or not privacy.strip():
+            return jsonify({"success": False, "error": "'auto_upload.default_privacy' must be a non-empty string."}), 400
+        cfg["auto_upload"]["enabled"] = bool(auto.get("enabled", False))
+        cfg["auto_upload"]["platforms"] = [str(p) for p in platforms]
+        cfg["auto_upload"]["default_privacy"] = privacy.strip()
+
+    if not save_upload_config(cfg):
+        return jsonify({"success": False, "error": "Failed to write upload_config.json"}), 500
+    return jsonify({"success": True})
 
 @app.route("/api/upload/youtube-auth-start", methods=["POST"])
 def api_youtube_auth_start():
-    res = start_youtube_local_auth(open_browser=True)
+    """
+    Starts the loopback OAuth flow on a background thread.
+
+    `flow.run_local_server()` blocks until the user completes the browser round-trip, so it must
+    never run inside a Flask request handler. The client polls /api/upload/youtube-auth-status/<id>.
+    """
+    auth_id = uuid.uuid4().hex
+    AUTH_JOBS[auth_id] = {"status": "pending", "result": None, "error": None}
+
+    def _worker():
+        try:
+            AUTH_JOBS[auth_id]["result"] = start_youtube_local_auth(open_browser=True)
+        except Exception as e:  # start_youtube_local_auth already traps, this is belt-and-braces
+            AUTH_JOBS[auth_id]["result"] = {"success": False, "error": str(e)}
+        finally:
+            AUTH_JOBS[auth_id]["status"] = "done"
+
+    threading.Thread(target=_worker, daemon=True).start()
+    return jsonify({"success": True, "status": "pending", "auth_id": auth_id})
+
+@app.route("/api/upload/youtube-auth-status/<auth_id>", methods=["GET"])
+def api_youtube_auth_status(auth_id):
+    job = AUTH_JOBS.get(auth_id)
+    if not job:
+        return jsonify({"success": False, "error": "Unknown auth request."}), 404
+    if job["status"] == "pending":
+        return jsonify({"success": True, "status": "pending"})
+    res = job["result"] or {"success": False, "error": "Authentication did not complete."}
+    AUTH_JOBS.pop(auth_id, None)
     return jsonify(res)
 
 @app.route("/api/upload/youtube-auth-url", methods=["GET"])

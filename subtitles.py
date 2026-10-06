@@ -109,6 +109,24 @@ EMOJI_MAP = {
 }
 
 SUBTITLE_STYLES = {
+    "none": {
+        "name": "No Subtitles",
+        "label": "🚫 No Subtitles (Raw 9:16)",
+        "preview_bg": "from-slate-700/20 to-zinc-900/40",
+        "badge_color": "text-slate-400 border-slate-600/30",
+        "font": "None",
+        "size": 0,
+        "primary_color": "",
+        "outline_color": "",
+        "outline": 0,
+        "shadow": 0,
+        "border_style": 0,
+        "back_color": "",
+        "margin_v": 0,
+        "highlight_color": None,
+        "pop_scale": False,
+        "uppercase": False,
+    },
     "bold_pop": {
         "name": "Bold Pop",
         "label": "🔥 Bold Pop (Opus Classic)",
@@ -125,6 +143,7 @@ SUBTITLE_STYLES = {
         "margin_v": 420,
         "highlight_color": "&H0000FFFF",  # Electric Yellow
         "pop_scale": True,
+        "uppercase": True,
     },
     "karaoke": {
         "name": "Karaoke Highlight",
@@ -142,6 +161,7 @@ SUBTITLE_STYLES = {
         "back_color": "&H80000000",
         "margin_v": 420,
         "karaoke_mode": True,
+        "uppercase": True,
     },
     "boxed_clean": {
         "name": "Boxed Clean",
@@ -159,6 +179,7 @@ SUBTITLE_STYLES = {
         "margin_v": 410,
         "highlight_color": "&H0000FFFF",
         "pop_scale": True,
+        "uppercase": True,
     },
     "minimal_caption": {
         "name": "Minimal Caption",
@@ -175,6 +196,9 @@ SUBTITLE_STYLES = {
         "back_color": "&H80000000",
         "margin_v": 360,
         "highlight_color": None,
+        # Natural case is intentional: this is the "subtle documentary caption" style and
+        # the UI preview renders it in sentence case.
+        "uppercase": False,
     },
     "hormozi": {
         "name": "Hormozi Classic",
@@ -192,6 +216,7 @@ SUBTITLE_STYLES = {
         "margin_v": 420,
         "highlight_color": "&H0000FFFF",
         "pop_scale": True,
+        "uppercase": True,
     },
     "beast": {
         "name": "Beast Viral",
@@ -209,6 +234,7 @@ SUBTITLE_STYLES = {
         "margin_v": 420,
         "highlight_color": "&H00FFFFFF",
         "pop_scale": True,
+        "uppercase": True,
     },
     "neon_green": {
         "name": "Cyber Neon",
@@ -226,6 +252,7 @@ SUBTITLE_STYLES = {
         "margin_v": 420,
         "highlight_color": "&H0033FF33",
         "pop_scale": True,
+        "uppercase": True,
     },
     "red_punch": {
         "name": "Red Punch",
@@ -243,6 +270,7 @@ SUBTITLE_STYLES = {
         "margin_v": 420,
         "highlight_color": "&H001010FF",
         "pop_scale": True,
+        "uppercase": True,
     },
     "clean_white": {
         "name": "Minimal White",
@@ -260,6 +288,7 @@ SUBTITLE_STYLES = {
         "margin_v": 420,
         "highlight_color": "&H00FFFFFF",
         "pop_scale": True,
+        "uppercase": True,
     },
     "netflix_standard": {
         "name": "Netflix Standard",
@@ -350,6 +379,31 @@ SUBTITLE_STYLES = {
         "pop_scale": True,
         "uppercase": True,
     },
+    "wild_den": {
+        "name": "Wild Den Bold",
+        "label": "🏔️ Wild Den (Outdoor Viral)",
+        "preview_bg": "from-amber-600/25 to-stone-900/40",
+        "badge_color": "text-yellow-400 border-yellow-500/30",
+        "font": "Impact",
+        "size": 64,
+        "primary_color": "&H00FFFFFF",
+        "secondary_color": "&H00FFFFFF",
+        "outline_color": "&H00000000",
+        "outline": 6,
+        "shadow": 3,
+        "border_style": 1,
+        "back_color": "&H90000000",
+        "margin_v": 930,
+        "alignment": 2,
+        "italic": True,
+        "bold": True,
+        "max_words_per_line": 2,
+        "max_duration_sec": 1.1,
+        "max_pause_sec": 0.25,
+        "highlight_color": "&H0000E6FF",  # #FFE600 yellow on the spoken word (ASS is &HAABBGGRR)
+        "pop_scale": False,
+        "uppercase": True,
+    },
 }
 
 def get_whisper_model(model_name: str = "base.en") -> WhisperModel:
@@ -359,13 +413,28 @@ def get_whisper_model(model_name: str = "base.en") -> WhisperModel:
     return _WHISPER_MODEL
 
 def to_ass_timestamp(seconds: float) -> str:
-    """Converts seconds (e.g. 72.35) to ASS timestamp format (0:01:12.35)."""
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = int(seconds % 60)
-    cs = int(round((seconds - int(seconds)) * 100))
-    if cs >= 100:
-        cs = 99
+    """
+    Converts seconds (e.g. 72.35) to ASS timestamp format (0:01:12.35).
+
+    Negative input is clamped to 0.0: Python's % returns a non-negative result for a
+    positive modulus, so -2.0 previously produced the invalid "-1:59:58.00" and negative
+    centiseconds broke the 2-digit format entirely.
+    """
+    try:
+        seconds = float(seconds)
+    except (TypeError, ValueError):
+        return "0:00:00.00"
+    if seconds != seconds:  # NaN
+        return "0:00:00.00"
+    seconds = max(0.0, seconds)
+
+    total_cs = int(round(seconds * 100))
+    cs = total_cs % 100
+    total_s = total_cs // 100
+    s = total_s % 60
+    total_m = total_s // 60
+    m = total_m % 60
+    h = total_m // 60
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
 def generate_synced_subtitles(
@@ -375,7 +444,7 @@ def generate_synced_subtitles(
     max_words_per_line: int = 3,
     max_pause_sec: float = 0.32,
     max_duration_sec: float = 1.5,
-    enable_emojis: bool = True,
+    enable_emojis: bool = False,
     enable_auto_bleep: bool = False,
     words_out: Optional[List[Dict]] = None
 ) -> bool:
@@ -384,6 +453,9 @@ def generate_synced_subtitles(
     and generates ASS subtitles with dynamic per-word active pop highlighting, auto-emojis, and pause-cleared silence.
     Supports auto-bleep censoring for demonetization prevention.
     """
+    if style_key in ("none", "no_subtitles", "off", None):
+        return False
+
     try:
         model = get_whisper_model("base.en")
         segments, _ = model.transcribe(
@@ -432,7 +504,7 @@ def generate_synced_subtitles(
 def build_ass_from_words(
     words: List[Dict],
     style_key: str = "bold_pop",
-    enable_emojis: bool = True,
+    enable_emojis: bool = False,
     enable_auto_bleep: bool = False,
     max_words_per_line: int = 3,
     max_pause_sec: float = 0.32,
@@ -444,6 +516,13 @@ def build_ass_from_words(
     """
     if not words:
         return ""
+
+    # Work on copies: the pop-highlight branch below nudges a word's start forward when
+    # whisper emits overlapping/zero-length timings, and `c` holds references to the caller's
+    # dicts. Mutating them in place corrupted the shared word list that
+    # generate_synced_subtitles hands back through words_out, which video_cutter then reuses
+    # for profanity-bleep windows and B-roll cue scheduling.
+    words = [dict(w) for w in words]
 
     style = SUBTITLE_STYLES.get(style_key, SUBTITLE_STYLES["bold_pop"])
     effective_max_words = style.get("max_words_per_line", max_words_per_line)
@@ -480,13 +559,16 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{style['font']},{style['size']},{style['primary_color']},{sec_color},{style['outline_color']},{back_color},1,0,0,0,100,100,0,0,{border_style},{style['outline']},{style['shadow']},2,60,60,{margin_v},1
+Style: Default,{style['font']},{style['size']},{style['primary_color']},{sec_color},{style['outline_color']},{back_color},{1 if style.get('bold', True) else 0},{1 if style.get('italic') else 0},0,0,100,100,0,0,{border_style},{style['outline']},{style['shadow']},{style.get('alignment', 2)},60,60,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     dialogues = []
-    is_upper = style.get("uppercase", True)
+    # `uppercase` is a per-style opt-in control. Defaulting it to True made every style that
+    # omitted the key shout in caps (10 of 13), which contradicted styles like
+    # minimal_caption whose UI preview shows natural case.
+    is_upper = style.get("uppercase", False)
     fade_tag = "{\\fad(80,80)}" if style.get("fade") else ""
 
     for chunk_idx, c in enumerate(chunks):
@@ -517,8 +599,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             chunk_end = c[-1]["end"] + 0.35
             if next_chunk:
                 chunk_end = min(chunk_end, next_chunk_start - 0.02)
-                if chunk_end <= c[0]["start"]:
-                    chunk_end = next_chunk_start if next_chunk_start > c[0]["start"] else c[0]["start"] + 0.5
+            # Unconditional clamp: this MUST also run for the final chunk, otherwise a chunk
+            # spanning <= 0.35s emits a Dialogue event with End <= Start and libass silently
+            # drops the caption.
+            if chunk_end <= c[0]["start"]:
+                chunk_end = max(c[-1]["end"], c[0]["start"] + 0.08)
             end_str = to_ass_timestamp(chunk_end)
 
             k_parts = []
@@ -542,8 +627,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             chunk_end = c[-1]["end"] + 0.35
             if next_chunk:
                 chunk_end = min(chunk_end, next_chunk_start - 0.02)
-                if chunk_end <= c[0]["start"]:
-                    chunk_end = next_chunk_start if next_chunk_start > c[0]["start"] else c[0]["start"] + 0.5
+            # Same unconditional clamp as the karaoke branch above; previously this guard was
+            # nested inside `if next_chunk:` so the final chunk of every static style could
+            # produce a negative-duration Dialogue event.
+            if chunk_end <= c[0]["start"]:
+                chunk_end = max(c[-1]["end"], c[0]["start"] + 0.08)
             end_str = to_ass_timestamp(chunk_end)
             line_text = " ".join(chunk_display_words)
             dialogues.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{fade_tag}{line_text}")

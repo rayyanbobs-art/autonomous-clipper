@@ -31,8 +31,12 @@ def get_jev_api_key() -> str:
 JEV_ENDPOINT = os.environ.get("JEV_ENDPOINT", "https://www.jevai.org/api/v1/decisions").strip()
 
 # Video Configuration
-MIN_CLIP_DURATION = 25.0  # seconds
-MAX_CLIP_DURATION = 60.0  # seconds
+# Candidate clip window geometry. These are the SINGLE source of truth: both the web GUI
+# (app.py) and the CLI (clipper.py) must generate the same windows for the same video, so
+# clip start times and scores are reproducible regardless of entry point.
+MIN_CLIP_DURATION = 35.0  # seconds
+MAX_CLIP_DURATION = 58.5  # seconds (stays under the 60s Shorts limit; sweet spot 42-52s)
+CLIP_WINDOW_STEP = 20.0    # seconds between consecutive window start points
 TARGET_WIDTH = 1080
 TARGET_HEIGHT = 1920
 

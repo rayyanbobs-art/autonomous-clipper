@@ -7,9 +7,11 @@ import sys
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 import numpy as np
+import json
 from config import TEMP_DIR, TARGET_WIDTH, TARGET_HEIGHT
 from subtitles import generate_synced_subtitles, detect_profanity_intervals
-from broll_engine import plan_and_fetch_brolls
+from broll_engine import plan_and_fetch_brolls, is_decodable_video
+import face_tracker
 from face_tracker import compute_smart_crop_offset, compute_gaming_split_crop
 
 def get_ffmpeg_path() -> str:
@@ -105,12 +107,22 @@ def apply_snappy_silence_cuts(
     if not silence_intervals:
         return False
 
+    # Invariant 4 & Job 1 Task 1: Silence removal must leave >= 180ms padding (0.20s)
+    # after spoken words to preserve trailing consonants, plosives, and natural breaths,
+    # with 50ms dialogue pre-roll. Silence gaps <= 250ms are left untouched to prevent stutter.
+    speech_pad_post = 0.20  # >= 180ms speech padding
+    speech_pad_pre = 0.05   # 50ms dialogue pre-roll
     keep_chunks = []
     cur_t = 0.0
     for s_start, s_end in silence_intervals:
-        if s_start - cur_t >= 0.15:
-            keep_chunks.append((cur_t, s_start))
-        cur_t = s_end
+        if (s_end - s_start) < (speech_pad_post + speech_pad_pre):
+            # Silence gap is smaller than pause buffer: keep audio continuous
+            continue
+        chunk_end = min(total_duration, s_start + speech_pad_post)
+        next_start = max(0.0, s_end - speech_pad_pre)
+        if chunk_end > cur_t and (chunk_end - cur_t) >= 0.15:
+            keep_chunks.append((cur_t, chunk_end))
+        cur_t = max(chunk_end, next_start)
 
     if total_duration - cur_t >= 0.15:
         keep_chunks.append((cur_t, total_duration))
@@ -120,14 +132,54 @@ def apply_snappy_silence_cuts(
 
     print(f"  [Snappy Cuts] Keeping {len(keep_chunks)} active audio chunks, cutting {len(silence_intervals)} silences.")
 
+    # Invariant 1: 20ms sine-squared equal-power micro-fades (curve=qsin) on every audio splice boundary
     filter_chains = []
     concat_inputs = []
+    total_kept_dur = 0.0
+    # Split edit (L-cut): the outgoing take's audio bleeds 200ms under the next shot.
+    # The a/v concat below keeps every segment lip-synced; the bleed is a separate
+    # layer (the ambience that followed each take, normally discarded) placed at the
+    # cut point with a 20ms S-curve fade-in and a 200ms S-curve fade-out.
+    lcut_bleed = 0.20
+    tail_chains = []
+    tail_labels = []
     for i, (start_t, end_t) in enumerate(keep_chunks):
+        dur = end_t - start_t
+        total_kept_dur += dur
+        fade_d = min(0.020, dur / 2.0)
+        fade_out_st = max(0.0, dur - fade_d)
+
         filter_chains.append(f"[0:v]trim=start={start_t:.3f}:end={end_t:.3f},setpts=PTS-STARTPTS[v{i}]")
-        filter_chains.append(f"[0:a]atrim=start={start_t:.3f}:end={end_t:.3f},asetpts=PTS-STARTPTS[a{i}]")
+        filter_chains.append(
+            f"[0:a]atrim=start={start_t:.3f}:end={end_t:.3f},asetpts=PTS-STARTPTS,"
+            f"afade=t=in:ss=0:d={fade_d:.3f}:curve=qsin,"
+            f"afade=t=out:st={fade_out_st:.3f}:d={fade_d:.3f}:curve=qsin[a{i}]"
+        )
         concat_inputs.append(f"[v{i}][a{i}]")
 
-    concat_filter = ";".join(filter_chains) + ";" + "".join(concat_inputs) + f"concat=n={len(keep_chunks)}:v=1:a=1[v][a]"
+        is_last = i == len(keep_chunks) - 1
+        if not is_last and end_t + lcut_bleed <= total_duration and (end_t - fade_d) >= start_t:
+            tail_start = end_t - fade_d
+            delay_ms = int(round((total_kept_dur - fade_d) * 1000))
+            tail_chains.append(
+                f"[0:a]atrim=start={tail_start:.3f}:end={end_t + lcut_bleed:.3f},asetpts=PTS-STARTPTS,"
+                f"afade=t=in:ss=0:d={fade_d:.3f}:curve=qsin,"
+                f"afade=t=out:st={fade_d:.3f}:d={lcut_bleed:.3f}:curve=qsin,"
+                f"adelay=delays={delay_ms}:all=1[t{i}]"
+            )
+            tail_labels.append(f"[t{i}]")
+
+    # Invariant 1 & Task 3: Room tone continuity bed (-48dB pink noise) so audio never drops to digital zero
+    room_tone_filter = (
+        f"anoisesrc=d={max(1.0, total_kept_dur):.2f}:c=pink:a=0.004:r=48000[room_tone];"
+        f"[a_voice]{''.join(tail_labels)}[room_tone]amix=inputs={2 + len(tail_labels)}:duration=first:"
+        f"dropout_transition=0:normalize=0[a]"
+    )
+    concat_filter = (
+        ";".join(filter_chains + tail_chains) + ";" +
+        "".join(concat_inputs) + f"concat=n={len(keep_chunks)}:v=1:a=1[v][a_voice];" +
+        room_tone_filter
+    )
 
     render_cmd = [
         ffmpeg_exe, "-y", "-i", str(input_video),
@@ -239,16 +291,20 @@ def cut_and_format_clip(
     output_path: Path,
     subtitle_style: str = "bold_pop",
     enable_broll: bool = True,
-    enable_emojis: bool = True,
-    framing_mode: str = "blurred",  # "blurred" or "smart_face"
+    enable_emojis: bool = False,
+    framing_mode: str = "smart_face",  # "smart_face", "blurred", or "split_gaming"
     enable_snappy_cuts: bool = True,
-    enable_punch_zooms: bool = True,
-    enable_outro: bool = True,
-    enable_auto_bleep: bool = False
+    enable_punch_zooms: bool = False,
+    enable_outro: bool = False,
+    enable_auto_bleep: bool = False,
+    enable_slow_zoom: bool = True,
+    enable_bg_music: bool = False,
+    bg_music_volume: float = 0.12,
 ) -> bool:
     """
     Downloads the precise timestamp slice using yt-dlp, applies snappy silence jump-cuts,
-    generates word-synced subtitles with auto-emojis, applies audio-energy punch-in zooms,
+    generates word-synced subtitles with auto-emojis, applies smart face centering with
+    cinematic slow push-in zoom and camera drift, overlays subtle ambient background music bed,
     censors demonetization profanities with 1000Hz bleep tone, overlays Pexels AI B-roll,
     formats into 9:16 vertical MP4, and appends a 1s outro card.
     """
@@ -262,38 +318,49 @@ def cut_and_format_clip(
     if temp_ass.exists():
         temp_ass.unlink()
 
-    # Step 1: Download the exact section using yt-dlp
-    download_section_arg = f"*{start_sec:.2f}-{end_sec:.2f}"
-    ffmpeg_dir = str(Path(ffmpeg_exe).parent)
-    ytdlp_cmd = [
-        sys.executable, "-m", "yt_dlp",
-        "--ffmpeg-location", ffmpeg_dir,
-        "--download-sections", download_section_arg,
-        "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-        "--merge-output-format", "mp4",
-        "--force-keyframes-at-cuts",
-        "--retries", "10",
-        "--fragment-retries", "10",
-        "--no-playlist",
-        "-o", str(temp_clip_raw),
-        youtube_url
-    ]
-
-    print(f"  [Downloader] Slicing section {start_sec}s -> {end_sec}s from YouTube...")
-    proc = subprocess.run(ytdlp_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-    if proc.returncode != 0:
-        print(f"  [Downloader Error] {proc.stderr[:300]}")
-        return False
-
-    # In case yt-dlp appended extension or formatting
+    # Step 1: Check if input is an existing local file or download using yt-dlp
     actual_downloaded = None
-    if temp_clip_raw.exists():
-        actual_downloaded = temp_clip_raw
-    else:
-        prefix = f"raw_{int(start_sec)}_{int(end_sec)}_{clip_id}"
-        for f in TEMP_DIR.glob(f"{prefix}*"):
-            actual_downloaded = f
-            break
+    is_local_file = False
+    try:
+        p_in = Path(youtube_url)
+        if p_in.is_file():
+            is_local_file = True
+            actual_downloaded = p_in
+    except Exception:
+        is_local_file = False
+
+    if not is_local_file:
+        download_section_arg = f"*{start_sec:.2f}-{end_sec:.2f}"
+        ffmpeg_dir = str(Path(ffmpeg_exe).parent)
+        ytdlp_cmd = [
+            sys.executable, "-m", "yt_dlp",
+            "--ffmpeg-location", ffmpeg_dir,
+            "--extractor-args", "youtube:player_client=all",
+            "--download-sections", download_section_arg,
+            "-f", "bestvideo[height<=2160]+bestaudio/best",
+            "--merge-output-format", "mp4",
+            "--force-keyframes-at-cuts",
+            "--retries", "10",
+            "--fragment-retries", "10",
+            "--no-playlist",
+            "-o", str(temp_clip_raw),
+            youtube_url
+        ]
+
+        print(f"  [Downloader] Slicing section {start_sec}s -> {end_sec}s from YouTube...")
+        proc = subprocess.run(ytdlp_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if proc.returncode != 0:
+            print(f"  [Downloader Error] {proc.stderr[:300]}")
+            return False
+
+        # In case yt-dlp appended extension or formatting
+        if temp_clip_raw.exists():
+            actual_downloaded = temp_clip_raw
+        else:
+            prefix = f"raw_{int(start_sec)}_{int(end_sec)}_{clip_id}"
+            for f in TEMP_DIR.glob(f"{prefix}*"):
+                actual_downloaded = f
+                break
 
     if not actual_downloaded or not actual_downloaded.exists():
         print(f"  [Downloader Error] Downloaded file not found in {TEMP_DIR}")
@@ -315,16 +382,20 @@ def cut_and_format_clip(
             print(f"  [Jump-Cuts Warning] Silence cut skipped: {e}")
 
     # Step 2: Generate word-level audio-synchronized subtitles with auto-emojis & optional auto-bleep
-    print(f"  [Subtitles] Generating audio-synced subtitles (Style: {subtitle_style}, Emojis: {enable_emojis}, Auto-Bleep: {enable_auto_bleep})...")
     words = []
-    has_subtitles = generate_synced_subtitles(
-        actual_downloaded,
-        temp_ass,
-        style_key=subtitle_style,
-        enable_emojis=enable_emojis,
-        enable_auto_bleep=enable_auto_bleep,
-        words_out=words
-    )
+    if subtitle_style in ("none", "no_subtitles", "off", None):
+        print("  [Subtitles] Subtitles disabled by user (No Subtitles mode).")
+        has_subtitles = False
+    else:
+        print(f"  [Subtitles] Generating audio-synced subtitles (Style: {subtitle_style}, Emojis: {enable_emojis}, Auto-Bleep: {enable_auto_bleep})...")
+        has_subtitles = generate_synced_subtitles(
+            actual_downloaded,
+            temp_ass,
+            style_key=subtitle_style,
+            enable_emojis=enable_emojis,
+            enable_auto_bleep=enable_auto_bleep,
+            words_out=words
+        )
 
     bleep_intervals: List[Tuple[float, float]] = []
     if enable_auto_bleep and words:
@@ -337,10 +408,23 @@ def cut_and_format_clip(
     if enable_broll and words:
         clip_dur = get_video_duration(actual_downloaded, ffmpeg_exe) or (end_sec - start_sec)
         broll_items = plan_and_fetch_brolls(words, clip_dur, max_brolls=2)
+        # A corrupt cached B-roll file cannot be decoded by ffmpeg, and because it is passed
+        # as an -i input that used to fail the WHOLE render and throw away a clip whose
+        # download, transcription and subtitle burn-in had all succeeded. Drop the bad
+        # overlay instead and keep the clip.
+        if broll_items:
+            verified: List[Dict] = []
+            for item in broll_items:
+                if is_decodable_video(item.get("file_path")):
+                    verified.append(item)
+                else:
+                    print(f"  [B-Roll Warning] Dropping undecodable B-roll '{item.get('file_path')}'; "
+                          f"continuing without this overlay.")
+            broll_items = verified
 
-    # Step 3.5: Detect vocal energy reaction peaks for 1.25x punch-in zooms
+    # Step 3.5: Detect vocal energy reaction peaks for 1.25x punch-in zooms (only if slow zoom disabled)
     spikes: List[Tuple[float, float]] = []
-    if enable_punch_zooms:
+    if enable_punch_zooms and not enable_slow_zoom:
         try:
             spikes = detect_audio_energy_spikes(actual_downloaded, spike_db_threshold=7.0, ffmpeg_exe=ffmpeg_exe)
             if spikes:
@@ -364,9 +448,9 @@ def cut_and_format_clip(
             crop_w, crop_h, crop_x = crop_res
             crop_y = 0
         base_filter = (
-            f"[0:v]scale='max(iw,{crop_w})':'max(ih,{crop_h})':force_original_aspect_ratio=increase,"
-            f"crop={crop_w}:{crop_h}:'{crop_x}':{crop_y},scale={TARGET_WIDTH}:{TARGET_HEIGHT},"
-            f"setsar=1[v_base]"
+            f"[0:v]fps=30,scale='max(iw,{crop_w})':'max(ih,{crop_h})':force_original_aspect_ratio=increase:flags=lanczos,"
+            f"crop={crop_w}:{crop_h}:'{crop_x}':{crop_y},scale={TARGET_WIDTH}:{TARGET_HEIGHT}:flags=lanczos,"
+            f"unsharp=lx=3:ly=3:la=0.4:cx=3:cy=3:ca=0.2,setsar=1[v_base]"
         )
     elif framing_mode == "split_gaming":
         print(f"  [Framing] Running Gaming Split-Screen (Top: Facecam Zoom, Bottom: Full Gameplay)...")
@@ -377,9 +461,9 @@ def cut_and_format_clip(
             cam_crop = (720, 640, 0, 0)
         cw, ch, cx, cy = cam_crop
         base_filter = (
-            f"[0:v]crop={cw}:{ch}:{cx}:{cy},scale={TARGET_WIDTH}:960:force_original_aspect_ratio=increase,crop={TARGET_WIDTH}:960,setsar=1[cam];"
-            f"[0:v]scale=270:240:force_original_aspect_ratio=increase,crop=270:240,boxblur=10:3,scale={TARGET_WIDTH}:960,setsar=1[game_bg];"
-            f"[0:v]scale={TARGET_WIDTH}:-2,setsar=1[game_fg];"
+            f"[0:v]fps=30,crop={cw}:{ch}:{cx}:{cy},scale={TARGET_WIDTH}:960:force_original_aspect_ratio=increase,crop={TARGET_WIDTH}:960,setsar=1[cam];"
+            f"[0:v]fps=30,scale=270:240:force_original_aspect_ratio=increase,crop=270:240,boxblur=10:3,scale={TARGET_WIDTH}:960,setsar=1[game_bg];"
+            f"[0:v]fps=30,scale={TARGET_WIDTH}:-2,setsar=1[game_fg];"
             f"[game_bg][game_fg]overlay=0:(960-h)/2[game_combined];"
             f"[cam][game_combined]vstack=inputs=2[stacked];"
             f"[stacked]drawbox=x=0:y=958:w={TARGET_WIDTH}:h=4:color=#6366f1@0.85:t=fill[v_base]"
@@ -387,17 +471,34 @@ def cut_and_format_clip(
     else:
         # High-speed glass blur background
         base_filter = (
-            f"[0:v]scale=270:480:force_original_aspect_ratio=increase,"
+            f"[0:v]fps=30,scale=270:480:force_original_aspect_ratio=increase,"
             f"crop=270:480,boxblur=8:2,scale={TARGET_WIDTH}:{TARGET_HEIGHT}[bg];"
-            f"[0:v]scale={TARGET_WIDTH}:-2[fg];"
+            f"[0:v]fps=30,scale={TARGET_WIDTH}:-2[fg];"
             f"[bg][fg]overlay=0:(H-h)/2,setsar=1[v_base]"
         )
         
     filter_parts.append(base_filter)
     current_top = "v_base"
 
-    # Audio-energy punch-in zoom jump cuts
-    if spikes:
+    # Step 3.2: Cinematic Slow Zoom In & Zoom Out with subtle organic camera drift (Outdoor Boys / Wild Den style)
+    if enable_slow_zoom:
+        # Periodic breathing zoom cycle (8.0 seconds per cycle = 240 frames @ 30fps)
+        # Smooth cosine oscillation between 1.00x (wide/base) and 1.05x (subtle push-in)
+        # Prevents getting stuck at maximum zoom or playing video at incorrect speed
+        cycle_frames = 240
+        zoom_expr = f"1.0+0.05*(1-cos(2*PI*on/{cycle_frames}))/2"
+        # Subtle horizontal camera drift (+/- 14px slow organic panning)
+        x_expr = f"iw/2-(iw/zoom/2)+sin(on/30.0*0.5)*14"
+        # Eye-line anchor at upper 30% of frame so head and eyes stay framed naturally
+        y_expr = f"ih*0.30-(ih/zoom*0.30)"
+        slow_zoom_filter = (
+            f"[{current_top}]zoompan=z='{zoom_expr}':d=1:x='{x_expr}':y='{y_expr}':s={TARGET_WIDTH}x{TARGET_HEIGHT}:fps=30,setsar=1[v_slow_zoom]"
+        )
+        filter_parts.append(slow_zoom_filter)
+        current_top = "v_slow_zoom"
+
+    # Audio-energy punch-in zoom jump cuts (suppressed when slow zoom is active)
+    if spikes and not enable_slow_zoom:
         cond = "+".join([f"between(t,{s:.2f},{e:.2f})" for s, e in spikes])
         zoom_filter = (
             f"[{current_top}]crop=w='if({cond},iw*0.80,iw)':h='if({cond},ih*0.80,ih)':x='(iw-ow)/2':y='(ih-oh)/3',"
@@ -405,6 +506,18 @@ def cut_and_format_clip(
         )
         filter_parts.append(zoom_filter)
         current_top = "v_zoomed"
+
+    # 30-Degree Focal Scale Shift: 1.15x punch-in zoom on consecutive cuts tracking same static speaker perspective
+    continuity_meta = face_tracker.get_shot_continuity_metadata(actual_downloaded)
+    focal_intervals = continuity_meta.get("focal_scale_intervals", []) if continuity_meta else []
+    if focal_intervals:
+        focal_cond = "+".join([f"between(t,{s:.2f},{e:.2f})" for s, e in focal_intervals])
+        focal_filter = (
+            f"[{current_top}]crop=w='if({focal_cond},iw/1.15,iw)':h='if({focal_cond},ih/1.15,ih)':"
+            f"x='(iw-ow)/2':y='(ih-oh)*0.35',scale={TARGET_WIDTH}:{TARGET_HEIGHT}:flags=lanczos,setsar=1[v_focal]"
+        )
+        filter_parts.append(focal_filter)
+        current_top = "v_focal"
 
     # Overlay B-Roll items
     for idx, b_item in enumerate(broll_items):
@@ -430,19 +543,78 @@ def cut_and_format_clip(
     else:
         filter_parts.append(f"[{current_top}]null[v]")
 
-    # Audio Censorship Bleep Graph
-    if bleep_intervals:
-        clip_dur = get_video_duration(actual_downloaded, ffmpeg_exe) or (end_sec - start_sec)
-        bleep_cond = "+".join([f"between(t,{s:.3f},{e:.3f})" for s, e in bleep_intervals])
-        audio_filter = (
-            f"[0:a]volume='if({bleep_cond}, 0, 1)':eval=frame[censored_voice];"
-            f"sine=f=1000:d={clip_dur:.2f},volume='if({bleep_cond}, 0.35, 0)':eval=frame[beep];"
-            f"[censored_voice][beep]amix=inputs=2:duration=first:dropout_transition=0[a]"
-        )
-        filter_parts.append(audio_filter)
-        audio_map = "[a]"
+    # Step 3.8: Audio Pipeline (Voice + Censorship Bleep + Atmospheric Background Music Bed)
+    clip_dur = get_video_duration(actual_downloaded, ffmpeg_exe) or (end_sec - start_sec) or 30.0
+    has_source_audio = has_audio_stream(actual_downloaded, ffmpeg_exe)
+
+    if has_source_audio:
+        if bleep_intervals:
+            bleep_cond = "+".join([f"between(t,{s:.3f},{e:.3f})" for s, e in bleep_intervals])
+            audio_filter = (
+                f"[0:a]volume='if({bleep_cond}, 0, 1)':eval=frame[censored_voice];"
+                f"sine=f=1000:d={clip_dur:.2f},volume='if({bleep_cond}, 0.35, 0)':eval=frame[beep];"
+                f"[censored_voice][beep]amix=inputs=2:duration=first:dropout_transition=0[voice_ready]"
+            )
+            filter_parts.append(audio_filter)
+            voice_output_label = "voice_ready"
+        else:
+            voice_output_label = "0:a"
     else:
-        audio_map = "0:a?"
+        voice_output_label = None
+
+    # Background music candidate selection
+    bg_music_file: Optional[Path] = None
+    if enable_bg_music:
+        audio_dir = Path(__file__).parent / "assets" / "audio"
+        if audio_dir.exists():
+            candidate_tracks = list(audio_dir.glob("*.wav")) + list(audio_dir.glob("*.mp3")) + list(audio_dir.glob("*.m4a"))
+            if candidate_tracks:
+                preferred = [t for t in candidate_tracks if "ambient" in t.name.lower()]
+                bg_music_file = preferred[0] if preferred else candidate_tracks[0]
+
+    extra_audio_inputs = []
+    if enable_bg_music:
+        fade_out_start = max(0.5, clip_dur - 1.2)
+        if bg_music_file and bg_music_file.exists():
+            bg_input_idx = 1 + len(broll_items)
+            extra_audio_inputs.append(str(bg_music_file))
+            filter_parts.append(
+                f"[{bg_input_idx}:a]volume={bg_music_volume:.2f},"
+                f"afade=t=in:ss=0:d=1.0,"
+                f"afade=t=out:st={fade_out_start:.2f}:d=1.2,"
+                f"atrim=0:{clip_dur:.2f}[music_bed]"
+            )
+            if voice_output_label:
+                filter_parts.append(
+                    f"[{voice_output_label}][music_bed]amix=inputs=2:duration=first:dropout_transition=0[a]"
+                )
+                audio_map = "[a]"
+            else:
+                audio_map = "[music_bed]"
+        else:
+            filter_parts.append(
+                f"aevalsrc=exprs='0.022*sin(2*PI*220*t)+0.016*sin(2*PI*329.6*t)+0.012*sin(2*PI*440*t)':s=44100:d={clip_dur:.2f},"
+                f"afade=t=in:ss=0:d=1.0,afade=t=out:st={fade_out_start:.2f}:d=1.2[music_synth]"
+            )
+            if voice_output_label:
+                filter_parts.append(
+                    f"[{voice_output_label}][music_synth]amix=inputs=2:duration=first:dropout_transition=0[a]"
+                )
+                audio_map = "[a]"
+            else:
+                audio_map = "[music_synth]"
+    else:
+        if voice_output_label == "0:a" or voice_output_label is None:
+            audio_map = "0:a?"
+        else:
+            audio_map = f"[{voice_output_label}]"
+
+    # EBU R128 loudness: -14 LUFS integrated, -1.0 dBTP true peak (Shorts/Reels/TikTok target).
+    # loudnorm upsamples to 192kHz internally, so resample back to 48kHz for AAC.
+    norm_in = ("0:a" if has_source_audio else None) if audio_map == "0:a?" else audio_map.strip("[]")
+    if norm_in:
+        filter_parts.append(f"[{norm_in}]loudnorm=I=-14:TP=-1.0:LRA=11,aresample=48000[a_norm]")
+        audio_map = "[a_norm]"
 
     filter_complex = ";".join(filter_parts)
 
@@ -455,14 +627,17 @@ def cut_and_format_clip(
     ]
     for b_item in broll_items:
         ffmpeg_cmd.extend(["-i", str(b_item["file_path"])])
+    for extra_in in extra_audio_inputs:
+        ffmpeg_cmd.extend(["-stream_loop", "-1", "-i", extra_in])
 
     ffmpeg_cmd.extend([
         "-filter_complex", filter_complex,
         "-map", "[v]",
         "-map", audio_map,
         "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "22",
+        "-preset", "medium",
+        "-crf", "18",
+        "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "192k",
         "-shortest",
@@ -478,7 +653,7 @@ def cut_and_format_clip(
         return False
 
     # Cleanup temp video slices
-    if actual_downloaded.exists():
+    if actual_downloaded.exists() and not is_local_file:
         try:
             actual_downloaded.unlink()
         except Exception:
@@ -500,10 +675,26 @@ def cut_and_format_clip(
         if outro_ok:
             has_main_audio = has_audio_stream(temp_main_rendered, ffmpeg_exe)
             if has_main_audio:
-                concat_filter = f"[0:v]scale={TARGET_WIDTH}:{TARGET_HEIGHT},setsar=1[v0];[1:v]scale={TARGET_WIDTH}:{TARGET_HEIGHT},setsar=1[v1];[v0][0:a][v1][1:a]concat=n=2:v=1:a=1[v][a]"
+                main_dur = get_video_duration(temp_main_rendered, ffmpeg_exe) or 1.0
+                xfade_dur = 0.025
+                fade_out_st = max(0.0, main_dur - xfade_dur)
+                concat_filter = (
+                    f"[0:v]fps=30,scale={TARGET_WIDTH}:{TARGET_HEIGHT},setsar=1[v0];"
+                    f"[1:v]fps=30,scale={TARGET_WIDTH}:{TARGET_HEIGHT},setsar=1[v1];"
+                    f"[0:a]aformat=sample_rates=48000:channel_layouts=stereo,afade=t=out:st={fade_out_st:.3f}:d={xfade_dur}:curve=qsin[a0];"
+                    f"[1:a]aformat=sample_rates=48000:channel_layouts=stereo,afade=t=in:ss=0:d={xfade_dur}:curve=qsin[a1];"
+                    f"[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]"
+                )
             else:
                 main_dur = get_video_duration(temp_main_rendered, ffmpeg_exe) or 1.0
-                concat_filter = f"[0:v]scale={TARGET_WIDTH}:{TARGET_HEIGHT},setsar=1[v0];[1:v]scale={TARGET_WIDTH}:{TARGET_HEIGHT},setsar=1[v1];anullsrc=r=44100:cl=stereo,atrim=duration={main_dur:.2f}[silence];[v0][silence][v1][1:a]concat=n=2:v=1:a=1[v][a]"
+                xfade_dur = 0.025
+                concat_filter = (
+                    f"[0:v]fps=30,scale={TARGET_WIDTH}:{TARGET_HEIGHT},setsar=1[v0];"
+                    f"[1:v]fps=30,scale={TARGET_WIDTH}:{TARGET_HEIGHT},setsar=1[v1];"
+                    f"anullsrc=r=44100:cl=stereo,atrim=duration={main_dur:.2f}[silence];"
+                    f"[1:a]aformat=sample_rates=44100:channel_layouts=stereo,afade=t=in:ss=0:d={xfade_dur}:curve=qsin[a1];"
+                    f"[v0][silence][v1][a1]concat=n=2:v=1:a=1[v][a]"
+                )
             concat_cmd = [
                 ffmpeg_exe, "-y",
                 "-i", str(temp_main_rendered),
@@ -512,8 +703,9 @@ def cut_and_format_clip(
                 "-map", "[v]",
                 "-map", "[a]",
                 "-c:v", "libx264",
-                "-preset", "fast",
-                "-crf", "22",
+                "-preset", "medium",
+                "-crf", "18",
+                "-pix_fmt", "yuv420p",
                 "-c:a", "aac",
                 "-b:a", "192k",
                 "-movflags", "+faststart",
@@ -538,5 +730,48 @@ def cut_and_format_clip(
             if output_path.exists():
                 output_path.unlink()
             shutil.move(str(temp_main_rendered), str(output_path))
+
+    # Step 6: Emit Continuity EDL Payload (cuts, focal anchors, and audio smoothing metadata)
+    try:
+        continuity_meta = face_tracker.get_shot_continuity_metadata(actual_downloaded)
+        cuts_data = continuity_meta.get("cuts", []) if continuity_meta else []
+        if not cuts_data:
+            cuts_data = [{
+                "cut_index": 0,
+                "source_in": round(float(start_sec), 3),
+                "source_out": round(float(end_sec), 3),
+                "shot_type": "talking_head",
+                "focal_anchor": {"x": int(TARGET_WIDTH // 2), "y": 0},
+                "transition_out": {"type": "CUT_ON_ACTION", "audio_bleed_ms": 0}
+            }]
+
+        edl_payload = {
+            "clip_id": clip_id,
+            "video_path": str(output_path),
+            "cuts": cuts_data,
+            "audio_smoothing": {
+                "crossfade_curve": "S_CURVE",
+                "boundary_crossfade_duration_ms": 20,
+                "l_cut_bleed_ms": 200 if enable_snappy_cuts else 0,
+                "room_tone_pad_active": bool(enable_snappy_cuts),
+                "room_tone_level_db": -48
+            },
+            "validation": {
+                "loudnorm": {"integrated_lufs": -14.0, "true_peak_dbtp": -1.0, "lra": 11},
+                "emojis_enabled": bool(enable_emojis),
+                "outro_card_appended": bool(enable_outro),
+                "punch_zoom_count": len(spikes),
+                "slow_zoom": {"enabled": bool(enable_slow_zoom), "range": [1.0, 1.05], "eye_line_anchor": 0.30}
+            }
+        }
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        edl_path = output_path.parent / f"{output_path.stem}_edl.json"
+        edl_path.write_text(json.dumps(edl_payload, indent=2), encoding="utf-8")
+        if clip_id != output_path.stem:
+            clip_id_edl_path = output_path.parent / f"{clip_id}_edl.json"
+            clip_id_edl_path.write_text(json.dumps(edl_payload, indent=2), encoding="utf-8")
+        print(f"  [EDL] Saved continuity EDL payload -> {edl_path.name}")
+    except Exception as e_edl:
+        print(f"  [EDL Warning] Failed to write EDL payload: {e_edl}")
 
     return True

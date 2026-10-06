@@ -9,6 +9,38 @@ import video_cutter
 from video_cutter import apply_snappy_silence_cuts
 import batch_rerender
 
+
+_LOG_REDIRECT_TMPDIR = None
+_LOG_REDIRECT_PREVIOUS = None
+
+
+def setUpModule():
+    """
+    Redirect the publish log to a tmp dir. This suite drives the production
+    clip/app/rerender paths with fixture transcripts; without redirection those runs
+    would append FAKE records to logs/publish_log.jsonl -- data-poisoning the very
+    log TRENDING_BOOST will one day be set from. See publish_log.default_log_path.
+    """
+    import os
+    global _LOG_REDIRECT_TMPDIR, _LOG_REDIRECT_PREVIOUS
+    _LOG_REDIRECT_PREVIOUS = os.environ.get("CLIPPER_PUBLISH_LOG")
+    _LOG_REDIRECT_TMPDIR = tempfile.TemporaryDirectory()
+    os.environ["CLIPPER_PUBLISH_LOG"] = str(
+        Path(_LOG_REDIRECT_TMPDIR.name) / "publish_log.jsonl")
+
+
+def tearDownModule():
+    import os
+    global _LOG_REDIRECT_TMPDIR, _LOG_REDIRECT_PREVIOUS
+    if _LOG_REDIRECT_PREVIOUS is None:
+        os.environ.pop("CLIPPER_PUBLISH_LOG", None)
+    else:
+        os.environ["CLIPPER_PUBLISH_LOG"] = _LOG_REDIRECT_PREVIOUS
+    if _LOG_REDIRECT_TMPDIR is not None:
+        _LOG_REDIRECT_TMPDIR.cleanup()
+        _LOG_REDIRECT_TMPDIR = None
+
+
 class TestConfirmedBugsFixes(unittest.TestCase):
 
     def test_01_batch_rerender_passes_feature_flags(self):

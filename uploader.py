@@ -16,6 +16,12 @@ YOUTUBE_SCOPES = [
     "https://www.googleapis.com/auth/youtube.readonly"
 ]
 
+# Google retired the out-of-band (OOB) redirect for installed apps in 2022. The supported
+# manual-copy alternative is the loopback redirect: Google redirects the browser to
+# http://localhost/?code=... , that page fails to load, and the user copies `code` off the
+# address bar. Any port is accepted by Google for loopback clients.
+DEFAULT_LOOPBACK_REDIRECT = "http://localhost"
+
 AYRSHARE_POST_URL = "https://app.ayrshare.com/api/post"
 AYRSHARE_MEDIA_URL = "https://app.ayrshare.com/api/media/upload"
 
@@ -105,8 +111,13 @@ def get_youtube_credentials(config: Optional[Dict[str, Any]] = None):
     return None
 
 
-def get_youtube_auth_url(redirect_uri: str = "urn:ietf:wg:oauth:2.0:oob") -> Dict[str, Any]:
-    """Generates the Google OAuth authorization URL for YouTube Data API."""
+def get_youtube_auth_url(redirect_uri: str = DEFAULT_LOOPBACK_REDIRECT) -> Dict[str, Any]:
+    """
+    Generates the Google OAuth authorization URL for the YouTube Data API.
+
+    Uses the loopback redirect (NOT the retired OOB flow) so the user can authorize via the
+    manual copy-paste fallback in Settings.
+    """
     try:
         from google_auth_oauthlib.flow import InstalledAppFlow
     except ImportError:
@@ -124,7 +135,7 @@ def get_youtube_auth_url(redirect_uri: str = "urn:ietf:wg:oauth:2.0:oob") -> Dic
     try:
         flow = InstalledAppFlow.from_client_secrets_file(str(secrets_path), YOUTUBE_SCOPES, redirect_uri=redirect_uri)
         auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline")
-        return {"success": True, "auth_url": auth_url}
+        return {"success": True, "auth_url": auth_url, "redirect_uri": redirect_uri}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -180,8 +191,11 @@ def start_youtube_local_auth(open_browser: bool = True) -> Dict[str, Any]:
         return {"success": False, "error": str(e)}
 
 
-def exchange_youtube_code(auth_code: str, redirect_uri: str = "urn:ietf:wg:oauth:2.0:oob") -> Dict[str, Any]:
-    """Exchanges user authorization code for persistent YouTube credentials token."""
+def exchange_youtube_code(auth_code: str, redirect_uri: str = DEFAULT_LOOPBACK_REDIRECT) -> Dict[str, Any]:
+    """
+    Exchanges a manually-copied authorization code for persistent YouTube credentials.
+    Must use the same loopback redirect_uri that generated the auth URL.
+    """
     try:
         from google_auth_oauthlib.flow import InstalledAppFlow
         from googleapiclient.discovery import build
@@ -433,8 +447,10 @@ def upload_clip_to_platforms(
             # Direct Native YouTube Data API v3
             yt_res = upload_video_to_youtube(video_path, title, description, hashtags, privacy_status=privacy_status)
             results["youtube"] = yt_res
-        elif cfg.get("ayrshare", {}).get("is_configured", False):
-            # Route YouTube through Ayrshare if native credentials not configured
+        elif cfg.get("ayrshare", {}).get("is_configured", False) and str(cfg.get("ayrshare", {}).get("api_key", "") or "").strip():
+            # Route YouTube through Ayrshare if native credentials not configured.
+            # Also require a non-empty key so a stale/cleared is_configured flag can never
+            # silently divert native YouTube uploads to Ayrshare.
             social_platforms.append("youtube")
         else:
             results["youtube"] = {

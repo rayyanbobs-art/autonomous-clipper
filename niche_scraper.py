@@ -85,6 +85,71 @@ def normalize_channel_url(channel_input: str) -> str:
     # Treat as handle without @
     return f"https://www.youtube.com/@{s}/videos"
 
+def channel_identity_tokens(*values: Any) -> set:
+    """
+    Extracts comparable identity tokens (channel IDs, @handles, /c/ and /user/ slugs)
+    from raw handles, channel IDs and channel URLs.
+    """
+    tokens = set()
+    for value in values:
+        if not value:
+            continue
+        s = str(value).strip()
+        if not s:
+            continue
+
+        if not s.lower().startswith(("http://", "https://")):
+            cid = re.fullmatch(r'(UC[A-Za-z0-9_\-]{20,})', s)
+            if cid:
+                tokens.add(cid.group(1))
+                continue
+            handle = re.fullmatch(r'@?([A-Za-z0-9._\-]{3,40})', s)
+            if handle:
+                tokens.add(handle.group(1).lower())
+            continue
+
+        for h in re.findall(r'youtube\.com/@([^/?#]+)', s, re.IGNORECASE):
+            tokens.add(h.lower())
+        for cid in re.findall(r'youtube\.com/channel/(UC[A-Za-z0-9_\-]+)', s, re.IGNORECASE):
+            tokens.add(cid)
+        for slug in re.findall(r'youtube\.com/(?:c|user)/([^/?#]+)', s, re.IGNORECASE):
+            tokens.add(slug.lower())
+    return tokens
+
+
+def is_identifiable_channel_input(channel_input: str) -> bool:
+    """
+    True when the input unambiguously names one specific channel (channel ID, @handle,
+    or a channel URL). Bare free-text names are NOT identifiable and are the only inputs
+    allowed to resolve through a fuzzy search fallback.
+    """
+    s = (channel_input or "").strip()
+    if not s:
+        return False
+    if s.lower().startswith(("http://", "https://")):
+        return True
+    if s.startswith("@"):
+        return True
+    if re.fullmatch(r'UC[A-Za-z0-9_\-]{20,}', s):
+        return True
+    return False
+
+
+def channel_matches_request(request_input: str, resolved: Dict[str, Any], resolved_url: str = "") -> bool:
+    """Verifies that an extracted channel record actually corresponds to the requested handle/ID."""
+    want = channel_identity_tokens(request_input)
+    got = channel_identity_tokens(
+        resolved.get('channel_id'),
+        resolved.get('uploader_id'),
+        resolved.get('channel_url'),
+        resolved.get('uploader_url'),
+        resolved_url
+    )
+    if not want or not got:
+        return False
+    return bool(want & got)
+
+
 def search_niche_channels(query: str, max_entries: int = 25) -> List[Dict[str, Any]]:
     """
     Search YouTube for a niche query and extract distinct active channels with metadata.
@@ -151,6 +216,7 @@ def get_channel_details(channel_input: str, max_videos: int = 30) -> Dict[str, A
     Fetch comprehensive channel info and recent video upload list with view counts.
     """
     url = normalize_channel_url(channel_input)
+    input_is_identifiable = is_identifiable_channel_input(channel_input)
     ydl_opts = {
         'quiet': True,
         'extract_flat': True,
@@ -160,6 +226,7 @@ def get_channel_details(channel_input: str, max_videos: int = 30) -> Dict[str, A
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        fuzzy_resolved = False
         try:
             res = ydl.extract_info(url, download=False)
             if not res:
@@ -173,7 +240,9 @@ def get_channel_details(channel_input: str, max_videos: int = 30) -> Dict[str, A
                     raise ValueError("extract_info returned None")
                 url = clean_url
             except Exception as e2:
-                # Fallback 2: Search for channel by query if handle was not direct or contained spaces
+                # Fallback 2: Search for the channel by query when the handle was not direct.
+                # CRITICAL: the resolved channel MUST be verified against the requested handle/ID,
+                # otherwise a typo silently analyses an unrelated channel's data.
                 try:
                     search_res = ydl.extract_info(f'ytsearch1:{channel_input}', download=False)
                     search_entries = search_res.get('entries', []) if search_res else []
@@ -181,14 +250,32 @@ def get_channel_details(channel_input: str, max_videos: int = 30) -> Dict[str, A
                         resolved_url = search_entries[0].get('channel_url') or search_entries[0].get('uploader_url')
                         if resolved_url:
                             norm_resolved = normalize_channel_url(resolved_url)
-                            res = ydl.extract_info(norm_resolved, download=False)
-                            if not res:
+                            candidate = ydl.extract_info(norm_resolved, download=False)
+                            if not candidate:
                                 raise ValueError("extract_info returned None")
-                            url = norm_resolved
+
+                            if channel_matches_request(channel_input, candidate, resolved_url):
+                                res = candidate
+                                url = norm_resolved
+                            elif not input_is_identifiable:
+                                # Input was a bare channel NAME, not a handle/ID/URL.
+                                # A fuzzy match is the only option, but it is recorded so the
+                                # caller/UI can disclose what was actually analysed.
+                                res = candidate
+                                url = norm_resolved
+                                fuzzy_resolved = True
+                            else:
+                                raise ValueError(
+                                    f"Requested channel '{channel_input}' but YouTube search resolved to a "
+                                    f"different channel ({candidate.get('channel_url') or norm_resolved}). "
+                                    f"Check the handle spelling."
+                                )
                         else:
-                            raise ValueError()
+                            raise RuntimeError("search result had no channel_url")
                     else:
-                        raise ValueError()
+                        raise RuntimeError("search returned no entries")
+                except ValueError:
+                    raise
                 except Exception:
                     logger.error(f"Failed to fetch channel {channel_input}: {e2}")
                     raise ValueError(f"Could not load channel '{channel_input}'. Please verify the channel handle or URL.")
@@ -268,6 +355,8 @@ def get_channel_details(channel_input: str, max_videos: int = 30) -> Dict[str, A
             'channel_url': res.get('channel_url') or url,
             'subscribers': subs,
             'total_videos_analyzed': len(videos),
+            'requested_input': channel_input,
+            'resolved_by_search': fuzzy_resolved,
             'videos': videos
         }
 
@@ -398,15 +487,17 @@ def get_video_transcript(video_id_or_url: str) -> Dict[str, Any]:
     api = YouTubeTranscriptApi()
 
     snippets = None
+    api_err = ""
     try:
         snippets = api.fetch(video_id)
-    except Exception:
+    except Exception as e:
+        api_err = str(e)
         try:
             transcript_list = api.list(video_id)
             t = transcript_list.find_transcript(['en', 'en-US', 'en-GB'])
             snippets = t.fetch()
-        except Exception:
-            pass
+        except Exception as e2:
+            api_err = str(e2)
 
     # If youtube-transcript-api failed or was IP-blocked, invoke yt-dlp Android client fallback
     if not snippets:
@@ -414,10 +505,17 @@ def get_video_transcript(video_id_or_url: str) -> Dict[str, Any]:
         if fallback_res:
             return fallback_res
 
+        is_vpn_or_blocked = any(k in api_err.lower() for k in ["blocking", "cloud provider", "ip ban", "bot", "sign in", "too many requests"])
+        err_msg = (
+            "YouTube blocked the connection (Bot verification / VPN detected). If you are using a VPN or proxy, please disconnect it and try again."
+            if is_vpn_or_blocked
+            else "No captions or transcript found for this video. Please ensure the video has English captions enabled."
+        )
+
         return {
             'video_id': video_id,
             'available': False,
-            'error': "No captions or transcript available for this video.",
+            'error': err_msg,
             'snippets': [],
             'full_text': ""
         }

@@ -172,6 +172,52 @@
             </button>
           </div>
 
+          <!-- Custom Video Time-Lapse / Section Slicing Widget -->
+          <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <i data-lucide="clock" class="w-3.5 h-3.5 text-indigo-400"></i>
+                <span>⏱️ Clip Specific Section (Optional)</span>
+              </span>
+              <span class="text-[11px] text-slate-500 font-mono">e.g. 10:00 to 21:00</span>
+            </div>
+            
+            <div class="flex items-center gap-3">
+              <div class="flex-1 flex items-center gap-2">
+                <label for="timeRangeStart" class="text-xs text-slate-400 shrink-0">From:</label>
+                <input
+                  type="text"
+                  id="timeRangeStart"
+                  placeholder="00:00"
+                  class="w-full px-3 py-1.5 bg-slate-950 border border-slate-700/80 rounded-lg text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                />
+              </div>
+              <div class="flex-1 flex items-center gap-2">
+                <label for="timeRangeEnd" class="text-xs text-slate-400 shrink-0">To:</label>
+                <input
+                  type="text"
+                  id="timeRangeEnd"
+                  placeholder="End"
+                  class="w-full px-3 py-1.5 bg-slate-950 border border-slate-700/80 rounded-lg text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                />
+              </div>
+              <button
+                type="button"
+                onclick="clearTimeRange()"
+                class="px-2.5 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition"
+                title="Reset time range to full video"
+              >
+                Reset
+              </button>
+            </div>
+
+            <!-- Dynamic Smart Range Suggestions Pills -->
+            <div id="suggestedRangesContainer" class="hidden pt-2 border-t border-slate-800/60 flex flex-wrap items-center gap-1.5">
+              <span class="text-[10px] text-slate-400 font-medium">Quick Chapters:</span>
+              <div id="suggestedRangesPills" class="flex flex-wrap items-center gap-1.5"></div>
+            </div>
+          </div>
+
           <!-- Controls Row -->
           <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-1">
             <div class="flex items-center gap-3 w-full sm:w-auto">
@@ -198,13 +244,13 @@
                 <span>Subtitle Style:</span>
               </span>
               <span id="stylePreviewBadge" class="text-[11px] font-bold px-2 py-0.5 rounded border text-yellow-400 border-yellow-500/30 bg-yellow-500/10">
-                🔥 Bold Pop (Opus Classic)
+                🏔️ Wild Den (Outdoor Viral)
               </span>
             </div>
 
             <!-- Style Selection Grid -->
             <div class="grid grid-cols-3 sm:grid-cols-5 gap-2" id="stylePicker">
-              <button type="button" onclick="setSubtitleStyle('bold_pop')" class="style-btn p-2 rounded-xl border border-indigo-500 bg-indigo-600/20 text-white text-left transition flex flex-col items-center justify-center gap-0.5 shadow-lg" data-style="bold_pop">
+              <button type="button" onclick="setSubtitleStyle('bold_pop')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="bold_pop">
                 <span class="text-xs font-bold text-yellow-300">🔥 Bold Pop</span>
                 <span class="text-[9px] text-slate-400">Opus Classic</span>
               </button>
@@ -256,6 +302,14 @@
                 <span class="text-xs font-bold text-yellow-300">⚡ Kinetic</span>
                 <span class="text-[9px] text-slate-400">TikTok / Reels</span>
               </button>
+              <button type="button" onclick="setSubtitleStyle('wild_den')" class="style-btn p-2 rounded-xl border border-indigo-500 bg-indigo-600/20 text-white text-left transition flex flex-col items-center justify-center gap-0.5 shadow-lg" data-style="wild_den">
+                <span class="text-xs font-bold text-yellow-400">🏔️ Wild Den</span>
+                <span class="text-[9px] text-slate-400">Outdoor Viral</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('none')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="none">
+                <span class="text-xs font-bold text-slate-300">🚫 No Subtitles</span>
+                <span class="text-[9px] text-slate-400">Raw 9:16 Video</span>
+              </button>
             </div>
 
             <!-- Interactive Live Subtitle Sample Box -->
@@ -290,7 +344,7 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
               <!-- B-Roll Toggle -->
               <label class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
-                <input type="checkbox" id="brollToggle" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 bg-slate-900 border-slate-700" />
+                <input type="checkbox" id="brollToggle" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 bg-slate-900 border-slate-700" />
                 <div class="flex flex-col">
                   <span class="text-xs font-semibold text-white flex items-center gap-1">
                     <span>🎬 AI Stock B-Roll</span>
@@ -301,7 +355,7 @@
 
               <!-- Auto-Emojis Toggle -->
               <label class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
-                <input type="checkbox" id="emojiToggle" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 bg-slate-900 border-slate-700" />
+                <input type="checkbox" id="emojiToggle" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 bg-slate-900 border-slate-700" />
                 <div class="flex flex-col">
                   <span class="text-xs font-semibold text-white flex items-center gap-1">
                     <span>✨ Auto-Emoji Subtitles</span>
@@ -318,19 +372,56 @@
                 <span>Framing Mode:</span>
               </span>
               <div class="inline-flex rounded-lg bg-slate-950 border border-slate-800 p-0.5" id="framingGroup">
-                <label class="px-2.5 py-1 text-[11px] font-semibold rounded-md cursor-pointer transition text-white bg-indigo-600 shadow" id="labelBlurred">
-                  <input type="radio" name="framingMode" value="blurred" checked class="hidden" onchange="setFramingUI('blurred')" />
-                  ⬛ Blurred Canvas
-                </label>
-                <label class="px-2.5 py-1 text-[11px] font-semibold rounded-md cursor-pointer transition text-slate-400 hover:text-white" id="labelFace">
-                  <input type="radio" name="framingMode" value="smart_face" class="hidden" onchange="setFramingUI('smart_face')" />
+                <label class="px-2.5 py-1 text-[11px] font-semibold rounded-md cursor-pointer transition text-white bg-indigo-600 shadow" id="labelFace">
+                  <input type="radio" name="framingMode" value="smart_face" checked class="hidden" onchange="setFramingUI('smart_face')" />
                   🎯 Smart Face
+                </label>
+                <label class="px-2.5 py-1 text-[11px] font-semibold rounded-md cursor-pointer transition text-slate-400 hover:text-white" id="labelBlurred">
+                  <input type="radio" name="framingMode" value="blurred" class="hidden" onchange="setFramingUI('blurred')" />
+                  ⬛ Blurred Canvas
                 </label>
                 <label class="px-2.5 py-1 text-[11px] font-semibold rounded-md cursor-pointer transition text-slate-400 hover:text-white" id="labelSplit">
                   <input type="radio" name="framingMode" value="split_gaming" class="hidden" onchange="setFramingUI('split_gaming')" />
                   🎮 Gaming Split
                 </label>
               </div>
+            </div>
+          </div>
+
+          <!-- Cinematic Polish & Audio Suite (Wild Den / Outdoor Boys Mode) -->
+          <div class="p-3.5 rounded-xl bg-slate-900/90 border border-indigo-500/30 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                <i data-lucide="video" class="w-4 h-4 text-indigo-400"></i>
+                <span>Cinematic Framing &amp; Audio Bed:</span>
+              </span>
+              <span class="text-[10px] font-semibold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                🌲 Wild Den / Outdoor Boys Mode
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <!-- Slow Zoom-In Toggle -->
+              <label class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
+                <input type="checkbox" id="slowZoomToggle" checked class="w-4 h-4 rounded text-indigo-500 focus:ring-indigo-500 bg-slate-900 border-slate-700" />
+                <div class="flex flex-col">
+                  <span class="text-xs font-semibold text-white flex items-center gap-1">
+                    <span>🎬 Slow Zoom-In &amp; Drift</span>
+                  </span>
+                  <span class="text-[10px] text-slate-400">1.0x&rarr;1.05x slow push + camera drift</span>
+                </div>
+              </label>
+
+              <!-- Atmospheric Music Bed Toggle -->
+              <label class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
+                <input type="checkbox" id="bgMusicToggle" class="w-4 h-4 rounded text-indigo-500 focus:ring-indigo-500 bg-slate-900 border-slate-700" />
+                <div class="flex flex-col">
+                  <span class="text-xs font-semibold text-white flex items-center gap-1">
+                    <span>🎵 Ambient Adventure Bed</span>
+                  </span>
+                  <span class="text-[10px] text-slate-400">Warm acoustic background music (-18dB)</span>
+                </div>
+              </label>
             </div>
           </div>
 
@@ -360,7 +451,7 @@
 
               <!-- Punch-Zooms Toggle -->
               <label class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
-                <input type="checkbox" id="zoomToggle" checked class="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700" />
+                <input type="checkbox" id="zoomToggle" class="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700" />
                 <div class="flex flex-col">
                   <span class="text-xs font-semibold text-white flex items-center gap-1">
                     <span>💥 Energy Punch-Zooms</span>
@@ -371,7 +462,7 @@
 
               <!-- Outro Card Toggle -->
               <label class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
-                <input type="checkbox" id="outroToggle" checked class="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700" />
+                <input type="checkbox" id="outroToggle" class="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700" />
                 <div class="flex flex-col">
                   <span class="text-xs font-semibold text-white flex items-center gap-1">
                     <span>🔴 Subscribe Outro</span>
@@ -390,7 +481,7 @@
                 <span>Jev AI Superpowers & Safety Suite:</span>
               </span>
               <span class="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                ⚡ 10x Parallel Batch VOD Scanner Active
+                ⚡ Batched Jev VOD Scanner Active
               </span>
             </div>
 
@@ -684,7 +775,7 @@
                   class="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 rounded-xl text-[11px] font-semibold transition flex items-center gap-1.5"
                 >
                   <i data-lucide="arrow-down-up" class="w-3 h-3 text-indigo-400"></i>
-                  <span id="chart-order-label">Sort: High to Low</span>
+                  <span id="chart-order-label">Sort: Chronological</span>
                 </button>
               </div>
             </div>
@@ -1002,7 +1093,13 @@
             One API key to post video reels and shorts simultaneously to TikTok and Instagram.
           </p>
           <div class="space-y-1">
-            <input type="password" id="input-ayrshare-key" placeholder="Enter Ayrshare API Key..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+            <div class="flex gap-2">
+              <input type="password" id="input-ayrshare-key" placeholder="Enter Ayrshare API Key..." class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+              <button type="button" id="btn-clear-ayrshare" class="shrink-0 px-2.5 py-1.5 bg-slate-900 hover:bg-rose-500/20 border border-slate-700 hover:border-rose-500/40 text-slate-300 hover:text-rose-300 rounded-lg text-[11px] font-semibold transition" title="Remove the stored Ayrshare key">
+                Remove
+              </button>
+            </div>
+            <p id="ayr-clear-hint" class="hidden text-[10px] text-rose-400"></p>
           </div>
         </div>
 
@@ -1180,8 +1277,9 @@
     // --- STATE MANAGEMENT ---
     let currentMainTab = 'clipper';
     let selectedClipCount = 3;
-    let selectedStyle = 'bold_pop';
+    let selectedStyle = 'wild_den';
     let activeJobId = null;
+    let currentJobWarning = null;
     let pollInterval = null;
 
     // Niche Finder State
@@ -1258,6 +1356,16 @@
         badge: '⚡ Kinetic Pop (TikTok / Reels)',
         badgeClass: 'text-yellow-300 border-yellow-400/40 bg-yellow-500/15',
         html: '<span class="text-yellow-300 text-lg sm:text-xl font-black tracking-wider uppercase" style="-webkit-text-stroke: 1.8px black;">WATCH</span> <span class="text-white text-base sm:text-lg font-black tracking-wide uppercase" style="-webkit-text-stroke: 1.8px black;">THIS 🔥</span>'
+      },
+      wild_den: {
+        badge: '🏔️ Wild Den (Outdoor Viral)',
+        badgeClass: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10',
+        html: '<span class="text-white text-lg sm:text-xl font-black italic tracking-wide uppercase" style="-webkit-text-stroke: 2px black;">ENTIRE THING</span>'
+      },
+      none: {
+        badge: '🚫 No Subtitles (Raw 9:16)',
+        badgeClass: 'text-slate-400 border-slate-600/30 bg-slate-700/20',
+        html: '<span class="text-slate-400 text-sm font-semibold italic">No subtitles burned • Raw 9:16 vertical crop</span>'
       }
     };
 
@@ -1336,6 +1444,7 @@
       // 2. Populate input
       const input = document.getElementById('urlInput');
       input.value = url;
+      fetchRangeSuggestions(url);
 
       // 3. Smooth scroll to input
       input.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1403,6 +1512,8 @@
         // Ayrshare
         const ayrCfg = cfg.ayrshare || {};
         const ayrBadge = document.getElementById('ayr-status-badge');
+        const ayrClearBtn = document.getElementById('btn-clear-ayrshare');
+        const ayrHint = document.getElementById('ayr-clear-hint');
         if (ayrBadge) {
           if (ayrCfg.is_configured) {
             ayrBadge.innerText = '✓ Configured';
@@ -1412,6 +1523,11 @@
             ayrBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700';
           }
         }
+        if (ayrClearBtn) {
+          ayrClearBtn.classList.toggle('hidden', !ayrCfg.is_configured);
+          ayrClearBtn.onclick = markAyrshareForRemoval;
+        }
+        if (ayrHint) ayrHint.classList.add('hidden');
 
         // Auto-upload
         const autoCfg = cfg.auto_upload || {};
@@ -1448,6 +1564,8 @@
       document.getElementById('modal-settings').classList.add('hidden');
     }
 
+    let pendingAyrshareClear = false;
+
     async function saveSettingsModal() {
       const inputKey = document.getElementById('input-gemini-key');
       localStorage.setItem('tg_gemini_key', inputKey.value.trim());
@@ -1455,18 +1573,23 @@
       const ayrKey = document.getElementById('input-ayrshare-key') ? document.getElementById('input-ayrshare-key').value.trim() : '';
       const autoUpload = document.getElementById('chk-auto-upload-enabled') ? document.getElementById('chk-auto-upload-enabled').checked : false;
       const defaultPrivacy = document.getElementById('select-default-privacy') ? document.getElementById('select-default-privacy').value : 'public';
-      
+
       const platforms = [];
       if (document.getElementById('chk-auto-yt')?.checked) platforms.push('youtube');
       if (document.getElementById('chk-auto-tt')?.checked) platforms.push('tiktok');
       if (document.getElementById('chk-auto-ig')?.checked) platforms.push('instagram');
+
+      // An empty field means "leave the stored key alone" unless Remove was pressed, so a
+      // blank password box can no longer silently wipe (or, previously, be unable to wipe)
+      // the credential.
+      const effectiveAyrKey = pendingAyrshareClear ? '' : ayrKey;
 
       try {
         const res = await fetch('/api/upload/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            ayrshare_key: ayrKey,
+            ayrshare_key: effectiveAyrKey,
             auto_upload: {
               enabled: autoUpload,
               default_privacy: defaultPrivacy,
@@ -1476,13 +1599,44 @@
         });
         const data = await res.json();
         if (data.success) {
+          pendingAyrshareClear = false;
+          const hint = document.getElementById('ayr-clear-hint');
+          if (hint) hint.classList.add('hidden');
           showToast('Settings saved successfully! ⚙️');
+        } else {
+          alert('Could not save settings: ' + (data.error || 'unknown error'));
         }
       } catch (e) {
         console.error(e);
+        alert('Could not save settings: ' + e.message);
       }
 
       closeSettingsModal();
+    }
+
+    function markAyrshareForRemoval() {
+      pendingAyrshareClear = true;
+      const input = document.getElementById('input-ayrshare-key');
+      if (input) input.value = '';
+      const hint = document.getElementById('ayr-clear-hint');
+      if (hint) {
+        hint.textContent = 'The stored Ayrshare key will be deleted when you press Save.';
+        hint.classList.remove('hidden');
+      }
+      showToast('Ayrshare key will be removed on Save');
+    }
+
+    async function pollYouTubeAuth(authId, timeoutMs = 180000) {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 1200));
+        const r = await fetch('/api/upload/youtube-auth-status/' + encodeURIComponent(authId));
+        if (!r.ok) return { success: false, error: 'Lost connection to the local auth server.' };
+        const d = await r.json();
+        if (d.status === 'pending') continue;
+        return d;
+      }
+      return { success: false, error: 'Timed out waiting for Google authorization. Use the manual code option.' };
     }
 
     async function startYouTubeOAuth() {
@@ -1490,13 +1644,28 @@
       try {
         const res = await fetch('/api/upload/youtube-auth-start', { method: 'POST' });
         const data = await res.json();
-        if (data.success) {
-          showToast('🎉 YouTube Connected: ' + (data.channel_title || 'Ready!'));
-          loadUploadConfigIntoSettings();
+        if (data.success && data.auth_id) {
+          // The loopback flow runs on a background thread; poll instead of holding the request.
+          const done = await pollYouTubeAuth(data.auth_id);
+          if (done.success) {
+            showToast('🎉 YouTube Connected: ' + (done.channel_title || 'Ready!'));
+            loadUploadConfigIntoSettings();
+            return;
+          }
+          // Fall through to the manual code-paste flow.
+          alert('Local sign-in did not finish: ' + (done.error || 'unknown error') +
+                '\n\nFalling back to the manual authorization-code flow.');
+        } else if (!data.success) {
+          alert('Error starting YouTube sign-in: ' + (data.error || 'unknown error'));
           return;
         }
+      } catch (err) {
+        alert('Error starting YouTube sign-in: ' + err.message);
+        return;
+      }
 
-        // Fallback to URL prompt flow if local server was blocked
+      // Fallback: manual copy-paste using the loopback redirect (OOB flow is retired by Google).
+      try {
         const urlRes = await fetch('/api/upload/youtube-auth-url');
         const urlData = await urlRes.json();
         if (!urlData.success) {
@@ -1506,14 +1675,20 @@
 
         window.open(urlData.auth_url, '_blank');
 
-        const code = prompt('Please authorize your YouTube channel in the opened Google tab, then paste the Authorization Code here:');
+        const code = prompt(
+          '1. Sign in and click "Allow" in the Google tab that just opened.\n' +
+          '2. The tab will fail to load and its address will end with ?code=... \n' +
+          '3. Copy everything after code= (or the whole ?code=... query) and paste it here:'
+        );
         if (!code || !code.trim()) return;
+
+        const cleaned = code.trim().replace(/^[?#]/, '').replace(/^code=/, '').split('&')[0];
 
         showToast('Connecting YouTube channel...');
         const postRes = await fetch('/api/upload/youtube-auth-code', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: code.trim() })
+          body: JSON.stringify({ code: cleaned })
         });
         const postData = await postRes.json();
         if (postData.success) {
@@ -1556,12 +1731,62 @@
       });
     }
 
+    function clearTimeRange() {
+      const s = document.getElementById('timeRangeStart');
+      const e = document.getElementById('timeRangeEnd');
+      if (s) s.value = '';
+      if (e) e.value = '';
+      showToast('Cleared custom time range (full video will be analyzed).');
+    }
+
+    let suggestDebounce = null;
+    async function fetchRangeSuggestions(url) {
+      if (!url) return;
+      const clean = url.trim();
+      if (!clean.includes('youtube.com') && !clean.includes('youtu.be') && clean.length !== 11) {
+        return;
+      }
+      const container = document.getElementById('suggestedRangesContainer');
+      const pills = document.getElementById('suggestedRangesPills');
+      if (!container || !pills) return;
+
+      try {
+        const res = await fetch('/api/video/suggest-ranges', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: clean })
+        });
+        const data = await res.json();
+        if (data.success && data.suggestions && data.suggestions.length > 0) {
+          pills.innerHTML = '';
+          data.suggestions.forEach(item => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'text-[11px] px-2 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-700 hover:border-indigo-500 transition font-mono flex items-center gap-1';
+            btn.innerHTML = `<span>${escapeHtml(item.label)}</span> <span class="text-slate-400 text-[10px]">(${item.start} - ${item.end})</span>`;
+            btn.onclick = () => {
+              const startInput = document.getElementById('timeRangeStart');
+              const endInput = document.getElementById('timeRangeEnd');
+              if (startInput) startInput.value = item.start;
+              if (endInput) endInput.value = item.end;
+              showToast(`⏱️ Selected section: ${item.label} (${item.start} - ${item.end})`);
+            };
+            pills.appendChild(btn);
+          });
+          container.classList.remove('hidden');
+        }
+      } catch (err) {
+        console.debug('Failed to fetch range suggestions:', err);
+      }
+    }
+
     async function pasteFromClipboard() {
       try {
         const text = await navigator.clipboard.readText();
         if (text) {
           document.getElementById('urlInput').value = text;
           showToast('Pasted from clipboard!');
+          fetchRangeSuggestions(text);
         }
       } catch (err) {
         alert('Could not access clipboard. Please press Ctrl+V to paste manually.');
@@ -1618,15 +1843,17 @@
       const url = document.getElementById('urlInput').value.trim();
       if (!url) return;
 
-      const enableBroll = document.getElementById('brollToggle') ? document.getElementById('brollToggle').checked : true;
-      const enableEmojis = document.getElementById('emojiToggle') ? document.getElementById('emojiToggle').checked : true;
+      const enableBroll = document.getElementById('brollToggle') ? document.getElementById('brollToggle').checked : false;
+      const enableEmojis = document.getElementById('emojiToggle') ? document.getElementById('emojiToggle').checked : false;
       const enableSnappy = document.getElementById('snappyToggle') ? document.getElementById('snappyToggle').checked : true;
-      const enableZooms = document.getElementById('zoomToggle') ? document.getElementById('zoomToggle').checked : true;
-      const enableOutro = document.getElementById('outroToggle') ? document.getElementById('outroToggle').checked : true;
+      const enableZooms = document.getElementById('zoomToggle') ? document.getElementById('zoomToggle').checked : false;
+      const enableOutro = document.getElementById('outroToggle') ? document.getElementById('outroToggle').checked : false;
       const enableSponsorKiller = document.getElementById('sponsorKillerToggle') ? document.getElementById('sponsorKillerToggle').checked : true;
       const enableAutoBleep = document.getElementById('autoBleepToggle') ? document.getElementById('autoBleepToggle').checked : false;
+      const enableSlowZoom = document.getElementById('slowZoomToggle') ? document.getElementById('slowZoomToggle').checked : true;
+      const enableBgMusic = document.getElementById('bgMusicToggle') ? document.getElementById('bgMusicToggle').checked : false;
       const framingRadio = document.querySelector('input[name="framingMode"]:checked');
-      const framingMode = framingRadio ? framingRadio.value : 'blurred';
+      const framingMode = framingRadio ? framingRadio.value : 'smart_face';
 
       document.getElementById('errorAlert').classList.add('hidden');
       document.getElementById('progressSection').classList.remove('hidden');
@@ -1652,7 +1879,11 @@
             enable_punch_zooms: enableZooms,
             enable_outro: enableOutro,
             enable_sponsor_killer: enableSponsorKiller,
-            enable_auto_bleep: enableAutoBleep
+            enable_auto_bleep: enableAutoBleep,
+            enable_slow_zoom: enableSlowZoom,
+            enable_bg_music: enableBgMusic,
+            time_range_start: document.getElementById('timeRangeStart') ? document.getElementById('timeRangeStart').value.trim() || null : null,
+            time_range_end: document.getElementById('timeRangeEnd') ? document.getElementById('timeRangeEnd').value.trim() || null : null
           })
         });
         const data = await res.json();
@@ -1679,6 +1910,7 @@
 
         if (data.status === 'completed') {
           clearInterval(pollInterval);
+          currentJobWarning = data.warning || null;
           activeJobId = null;
           document.getElementById('submitBtn').disabled = false;
           showToast('All clips generated successfully! 🎉');
@@ -1688,8 +1920,13 @@
           loadClips();
         } else if (data.status === 'failed') {
           clearInterval(pollInterval);
+          currentJobWarning = null;
           activeJobId = null;
           document.getElementById('submitBtn').disabled = false;
+          // Re-render, or the previous run's warning strip stays on screen next to this
+          // run's error alert. Clearing the binding is not enough: nothing had re-rendered
+          // the grid since, so the stale strip is still what the user is looking at.
+          loadClips();
           showError(data.error || 'Job failed unexpectedly');
         }
       } catch (err) {
@@ -1717,6 +1954,9 @@
         const res = await fetch('/api/clips');
         const data = await res.json();
         const clips = data.clips || [];
+        const warnHtml = currentJobWarning
+          ? `<div role="status" aria-live="polite" class="col-span-full mb-2 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">⚠️ ${escapeHtml(currentJobWarning)}</div>`
+          : '';
         window.currentClipsList = clips;
         const grid = document.getElementById('clipsGrid');
         const emptyState = document.getElementById('emptyState');
@@ -1731,13 +1971,17 @@
         }
 
         emptyState.classList.add('hidden');
-        grid.innerHTML = clips.map((c, i) => {
+        grid.innerHTML = warnHtml + clips.map((c, i) => {
           const hashtagsStr = (c.suggested_hashtags || []).join(' ');
           const rawTitle = c.suggested_title || `Viral Moment #${c.rank || i+1}`;
           const title = escapeHtml(rawTitle);
           const cat = escapeHtml((c.niche || c.category || 'High Value').replace('_', ' '));
-          const score = c.virality_score ? c.virality_score.toFixed(1) : '2.0';
-          const rubricAvg = c.rubric_average ? Number(c.rubric_average).toFixed(1) : (c.virality_score ? (c.virality_score * 3.0).toFixed(1) : '6.5');
+          // Existence checks, not truthiness checks: Jev can legitimately return a score of
+          // 0, and a falsy test rendered that as the 2.0 placeholder.
+          const hasScore = c.virality_score !== undefined && c.virality_score !== null && c.virality_score !== '';
+          const score = hasScore ? Number(c.virality_score).toFixed(1) : '2.0';
+          const hasRubric = c.rubric_average !== undefined && c.rubric_average !== null && c.rubric_average !== '';
+          const rubricAvg = hasRubric ? Number(c.rubric_average).toFixed(1) : (hasScore ? (Number(c.virality_score) * 3.0).toFixed(1) : '6.5');
           const rubric = c.rubric_scores || {};
           const passed = c.passed_gate !== undefined ? c.passed_gate : (Number(rubricAvg) >= 7.0);
           const notes = escapeHtml(c.critique_notes || '');
@@ -1815,7 +2059,9 @@
 
                   ${uploadReceiptsHtml ? `<div class="flex items-center gap-1.5 flex-wrap">${uploadReceiptsHtml}</div>` : ''}
 
-                  <h4 class="text-sm font-bold text-white leading-snug line-clamp-2">${title}</h4>
+                  ${c.seo_topic ? `<p class="text-[10px] font-mono text-slate-400 mb-1 truncate">SEO: ${escapeHtml(c.seo_topic)}</p>` : ''}
+
+                  <h4 class="text-sm font-bold text-white leading-snug break-words">${title}</h4>
 
                   <!-- 6-Dimension Critique Gate Rubric -->
                   <div class="space-y-1.5 pt-1">
@@ -1914,11 +2160,13 @@
           chip.innerHTML = `
             <span class="font-medium group-hover:text-white line-clamp-1">${escapeHtml(cand.title)}</span>
             <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-indigo-600/20 text-indigo-300 font-mono shrink-0 ml-2">${escapeHtml(cand.framework || 'hook')}</span>
+            ${cand.keyword ? `<span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono shrink-0 ml-2">${escapeHtml(cand.keyword)}</span>` : ''}
           `;
           chip.onclick = () => {
             if (titleInput) {
               titleInput.value = cand.title;
               updateCharCount();
+              syncUploadDescription();
               showToast('Selected hook: ' + (cand.framework || 'Viral'));
             }
           };
@@ -1928,13 +2176,8 @@
         candContainer.classList.add('hidden');
       }
 
-      // Description & hashtags
-      const hashtags = (clip.suggested_hashtags || []).join(' ');
-      const descInput = document.getElementById('upload-desc-input');
-      if (descInput) {
-        const titleVal = titleInput ? titleInput.value : '';
-        descInput.value = `${titleVal}\n\n${hashtags}`;
-      }
+      // Description & hashtags (re-derived by syncUploadDescription when the title changes)
+      syncUploadDescription();
 
       // Reset status area
       const statusArea = document.getElementById('upload-status-area');
@@ -1980,6 +2223,19 @@
         count.innerText = `${len}/100`;
         count.className = len > 100 ? 'text-[10px] text-red-400 font-bold font-mono' : 'text-[10px] text-slate-400 font-mono';
       }
+    }
+
+    function syncUploadDescription() {
+      // The description embeds the title, so it must be re-derived whenever the title
+      // changes (e.g. picking an alternative hook chip). Previously it was only built once
+      // when the modal opened, leaving the published description on the old title.
+      const titleInput = document.getElementById('upload-title-input');
+      const descInput = document.getElementById('upload-desc-input');
+      if (!descInput) return;
+      const current = currentUploadClip || {};
+      const hashtags = (current.suggested_hashtags || []).join(' ');
+      const titleVal = titleInput ? titleInput.value : '';
+      descInput.value = `${titleVal}\n\n${hashtags}`;
     }
 
     async function executeUploadFromModal() {
@@ -2352,7 +2608,8 @@
       chartSortMode = chartSortMode === 'timeline' ? 'ranked' : 'timeline';
       const label = document.getElementById('chart-order-label');
       if (label) {
-        label.textContent = chartSortMode === 'ranked' ? 'Sort: Chronological' : 'Sort: High to Low';
+        // 'ranked' sorts by views descending; 'timeline' sorts chronologically.
+        label.textContent = chartSortMode === 'ranked' ? 'Sort: High to Low' : 'Sort: Chronological';
       }
       if (activeChannelData && activeChannelVideos.length > 0) {
         renderChannelChart(activeChannelVideos, activeChannelData.stats.median_views);
@@ -2909,6 +3166,19 @@
     document.addEventListener('DOMContentLoaded', () => {
       if (window.lucide) lucide.createIcons();
       loadClips();
+
+      const urlInput = document.getElementById('urlInput');
+      if (urlInput) {
+        urlInput.addEventListener('input', (e) => {
+          clearTimeout(suggestDebounce);
+          suggestDebounce = setTimeout(() => {
+            fetchRangeSuggestions(e.target.value);
+          }, 600);
+        });
+        urlInput.addEventListener('change', (e) => {
+          fetchRangeSuggestions(e.target.value);
+        });
+      }
     });
   </script>
 </body>

@@ -1,5 +1,7 @@
 import os
 import re
+import shutil
+import subprocess
 import urllib.request
 import urllib.parse
 import json
@@ -79,11 +81,44 @@ def search_pexels_video(query: str, api_key: str = None) -> Optional[str]:
         print(f"  [B-Roll Engine] Pexels search error for '{query}': {e}")
         return None
 
+def is_decodable_video(path: Path) -> bool:
+    """
+    Validates that a media file actually decodes, using ffprobe.
+
+    A size check alone cannot tell a good file from a truncated-but-complete one, and the
+    cache key is a hash of the remote URL, so a poisoned entry would otherwise be served
+    forever and every render touching that keyword would fail.
+    """
+    try:
+        if not path.exists() or path.stat().st_size <= 50000:
+            return False
+    except OSError:
+        return False
+
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        # No probe available: fall back to a size sanity check rather than blocking the render.
+        return True
+
+    try:
+        proc = subprocess.run(
+            [ffprobe, "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=codec_type", "-of", "default=noprint_wrappers=1:nokey=1",
+             str(path)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20
+        )
+        return proc.returncode == 0 and "video" in (proc.stdout or "").lower()
+    except Exception:
+        return False
+
+
 def download_broll(url: str, dest_path: Path) -> bool:
     """Downloads B-roll video to local destination atomically and safely."""
     if dest_path.exists():
-        if dest_path.stat().st_size > 50000:
+        if is_decodable_video(dest_path):
             return True
+        # Cached entry failed decode validation (truncated CDN response, upstream rotation).
+        # Evict it so the retry below can re-fetch instead of re-serving the poison.
         try:
             dest_path.unlink()
         except Exception:
@@ -102,12 +137,19 @@ def download_broll(url: str, dest_path: Path) -> bool:
                     break
                 out_f.write(chunk)
         if tmp_path.exists() and tmp_path.stat().st_size > 50000:
+            if is_decodable_video(tmp_path):
+                try:
+                    tmp_path.replace(dest_path)
+                except Exception:
+                    if not (dest_path.exists() and dest_path.stat().st_size > 50000):
+                        return False
+                return dest_path.exists() and dest_path.stat().st_size > 50000
+            # Downloaded but undecodable: do not cache it.
             try:
-                tmp_path.replace(dest_path)
+                tmp_path.unlink()
             except Exception:
-                if not (dest_path.exists() and dest_path.stat().st_size > 50000):
-                    return False
-            return dest_path.exists() and dest_path.stat().st_size > 50000
+                pass
+            return False
         return False
     except Exception as e:
         print(f"  [B-Roll Engine] Download error from {url}: {e}")

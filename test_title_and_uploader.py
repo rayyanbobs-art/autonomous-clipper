@@ -9,8 +9,10 @@ from title_tag_engine import (
     extract_topical_entities,
     find_punchy_quote,
     generate_candidate_titles,
-    clean_transcript_text
+    clean_transcript_text,
+    score_and_rank_titles_with_jev,
 )
+from title_seo import validate_title, ALL_PATTERNS
 from uploader import (
     load_upload_config,
     save_upload_config,
@@ -49,15 +51,40 @@ class TestTitleTagAndUploader(unittest.TestCase):
         self.assertGreater(len(quote), 10)
 
     def test_03_title_candidates_generation(self):
-        """Candidate titles generate diverse frameworks."""
+        """
+        Candidates are diverse, and every one is a validatable SEO title with a keyword.
+
+        This previously asserted the presence of two hardcoded ids, `curiosity_gap` and
+        `pattern_interrupt`. Those belonged to the old five-branch entity engine and were
+        its only framework labels; `title_seo` replaced it with a pattern bank, so the ids
+        no longer exist and the framework a given clip leads with now depends on the video
+        context and the rotation.
+
+        Asserting those two ids is therefore not a contract the engine can still honour.
+        What the test was really protecting -- that the candidate set is diverse and that no
+        candidate is a junk or over-length title -- is now asserted directly and STRICTLY:
+        uniqueness of ids and frameworks, the 5-key shape Task 5 indexes, a `pattern_id`
+        that resolves against ALL_PATTERNS, and a title that passes `validate_title`.
+        """
         candidates = generate_candidate_titles(self.sample_transcript, "tech_ai")
         self.assertGreaterEqual(len(candidates), 3)
         ids = [c["id"] for c in candidates]
-        self.assertIn("curiosity_gap", ids)
-        self.assertIn("pattern_interrupt", ids)
+        self.assertEqual(len(ids), len(set(ids)), f"candidate ids repeat: {ids}")
+        frameworks = [c["framework"] for c in candidates]
+        self.assertEqual(len(frameworks), len(set(frameworks)),
+                         f"candidate frameworks repeat: {frameworks}")
+        pattern_ids = {p["id"] for p in ALL_PATTERNS}
         for c in candidates:
             self.assertLessEqual(len(c["title"]), 100)
             self.assertGreater(len(c["title"]), 10)
+            self.assertEqual(
+                set(c), {"id", "framework", "title", "pattern_id", "keyword"},
+                f"candidate shape drifted: {sorted(c)}")
+            self.assertIn(c["pattern_id"], pattern_ids)
+            self.assertTrue(c["keyword"].strip(),
+                            f"{c['title']!r} has no keyword to search on")
+            ok, reason = validate_title(c["title"])
+            self.assertTrue(ok, f"{c['title']!r} rejected by the SEO gate: {reason}")
 
     def test_04_full_title_and_tag_engine(self):
         """Full engine returns title, hashtags, candidates, niche, platform metadata."""
@@ -212,6 +239,162 @@ class TestTitleTagAndUploader(unittest.TestCase):
             self.assertEqual(res.status_code, 200)
             post_data = res.get_json()
             self.assertIn("youtube", post_data)
+
+    def test_08_jev_scoring_with_visual_context_and_guardrails(self):
+        """Jev payload includes visual_context and handles multi-question decisions."""
+        candidates = [
+            {"id": "cand_1", "framework": "Curiosity", "title": "Watch This: The Truth About Snow Cave 🤯"},
+            {"id": "cand_2", "framework": "Loss Aversion", "title": "The Mistake Everyone Makes With Snow Cave 🔥"},
+        ]
+        visual_ctx = {
+            "scene_type": "Outdoor snowy mountain",
+            "action_detected": "Digging into snow cave with shovel",
+            "on_screen_text": "ALASKA -30F"
+        }
+
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {
+            "data": {
+                "answers": {
+                    "best_title_hook": {"choice": "cand_2", "confidence": 0.91},
+                    "content_niche": {"choice": "outdoors_survival"},
+                    "clickbait_penalty": 0.05,
+                    "visual_clip_alignment": 0.95,
+                    "hook_ctr_potential": {"score": 3.0}
+                }
+            }
+        }
+
+        with patch("requests.post", return_value=fake_resp) as mock_post:
+            best_id, niche, conf = score_and_rank_titles_with_jev(
+                candidates=candidates,
+                transcript_text=self.sample_transcript,
+                api_key="fake_jev_key_123",
+                topics=["snow cave"],
+                visual_context=visual_ctx
+            )
+            self.assertEqual(best_id, "cand_2")
+            self.assertEqual(niche, "outdoors_survival")
+            self.assertAlmostEqual(conf, 0.91)
+
+            # Verify the payload structure passed to Jev API
+            self.assertTrue(mock_post.called)
+            _args, kwargs = mock_post.call_args
+            payload = kwargs.get("json", {})
+            self.assertIn("visual_clip_context", payload.get("state", {}))
+            self.assertEqual(payload["state"]["visual_clip_context"], visual_ctx)
+            questions = payload.get("questions", {})
+            self.assertIn("visual_clip_alignment", questions)
+            self.assertIn("clickbait_penalty", questions)
+            self.assertEqual(questions["visual_clip_alignment"]["type"], "noul")
+            self.assertEqual(questions["clickbait_penalty"]["type"], "noul")
+
+    def test_09_jev_low_confidence_falls_back_to_local_ranking(self):
+        """When Jev confidence is below 0.60, system falls back to deterministic local ranking."""
+        candidates = [
+            {"id": "poor_cand", "framework": "A", "title": "A Long Windy Lead In About Snow Cave"},
+            {"id": "sharp_cand", "framework": "B", "title": "What Nobody Tells You About Snow Cave 🔥"},
+        ]
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {
+            "data": {
+                "answers": {
+                    "best_title_hook": {"choice": "poor_cand", "confidence": 0.42},  # Low confidence < 0.60
+                    "content_niche": {"choice": "outdoors_survival"},
+                    "clickbait_penalty": 0.02,
+                    "visual_clip_alignment": 0.90
+                }
+            }
+        }
+        with patch("requests.post", return_value=fake_resp):
+            best_id, _niche, conf = score_and_rank_titles_with_jev(
+                candidates=candidates,
+                transcript_text=self.sample_transcript,
+                api_key="fake_jev_key_123",
+                topics=["snow cave"]
+            )
+            # Must fall back to local ranking, which prefers sharp_cand over poor_cand
+            self.assertEqual(best_id, "sharp_cand")
+            self.assertEqual(conf, 0.70)
+
+    def test_10_jev_clickbait_penalty_triggers_fallback(self):
+        """When Jev detects clickbait probability > 0.50, title is rejected in favor of local ranking."""
+        candidates = [
+            {"id": "clickbait_cand", "framework": "A", "title": "You Will Not Believe This Insane Secret"},
+            {"id": "honest_cand", "framework": "B", "title": "What Nobody Tells You About Snow Cave 🔥"},
+        ]
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {
+            "data": {
+                "answers": {
+                    "best_title_hook": {"choice": "clickbait_cand", "confidence": 0.95},
+                    "content_niche": {"choice": "outdoors_survival"},
+                    "clickbait_penalty": 0.88,  # Deceptive!
+                    "visual_clip_alignment": 0.85
+                }
+            }
+        }
+        with patch("requests.post", return_value=fake_resp):
+            best_id, _niche, conf = score_and_rank_titles_with_jev(
+                candidates=candidates,
+                transcript_text=self.sample_transcript,
+                api_key="fake_jev_key_123",
+                topics=["snow cave"]
+            )
+            # Must reject clickbait candidate and fall back to local ranking
+            self.assertEqual(best_id, "honest_cand")
+            self.assertEqual(conf, 0.70)
+
+    def test_11_jev_visual_mismatch_triggers_fallback(self):
+        """When title visually conflicts with the clip frame (prob < 0.40), fallback triggers."""
+        candidates = [
+            {"id": "wrong_scene_cand", "framework": "A", "title": "Inside The Luxury Superyacht"},
+            {"id": "right_scene_cand", "framework": "B", "title": "What Nobody Tells You About Snow Cave 🔥"},
+        ]
+        visual_ctx = {"scene_type": "Outdoor snowy arctic mountain"}
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {
+            "data": {
+                "answers": {
+                    "best_title_hook": {"choice": "wrong_scene_cand", "confidence": 0.88},
+                    "content_niche": {"choice": "business_money"},
+                    "clickbait_penalty": 0.10,
+                    "visual_clip_alignment": 0.12  # Visual mismatch!
+                }
+            }
+        }
+        with patch("requests.post", return_value=fake_resp):
+            best_id, _niche, conf = score_and_rank_titles_with_jev(
+                candidates=candidates,
+                transcript_text=self.sample_transcript,
+                api_key="fake_jev_key_123",
+                topics=["snow cave"],
+                visual_context=visual_ctx
+            )
+            self.assertEqual(best_id, "right_scene_cand")
+            self.assertEqual(conf, 0.70)
+
+    def test_12_orchestrator_passes_visual_context_and_exposes_grounding(self):
+        """generate_smart_title_and_hashtags accepts visual_context and reports visual_grounding."""
+        visual_ctx = {"scene_type": "Gym setting", "action": "Bench press"}
+        meta = generate_smart_title_and_hashtags(
+            transcript_text=self.sample_transcript,
+            category="tech_ai",
+            visual_context=visual_ctx
+        )
+        self.assertIn("visual_grounding", meta)
+        self.assertTrue(meta["visual_grounding"])
+
+        # Without visual context
+        meta_no_vis = generate_smart_title_and_hashtags(
+            transcript_text=self.sample_transcript,
+            category="tech_ai"
+        )
+        self.assertFalse(meta_no_vis["visual_grounding"])
 
 if __name__ == "__main__":
     unittest.main()
