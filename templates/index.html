@@ -1845,6 +1845,10 @@
       try {
         showToast('Opening Windows file browser...');
         const res = await fetch('/api/browse-local-file', { method: 'POST' });
+        if (!res.ok) {
+          showToast('Server returned error ' + res.status + '. Is the server running?');
+          return;
+        }
         const data = await res.json();
         if (data.success && data.file_path) {
           const input = document.getElementById('urlInput');
@@ -1854,9 +1858,12 @@
             showToast(`Selected offline video: ${filename}`);
             fetchRangeSuggestions(data.file_path);
           }
+        } else {
+          showToast('No file selected');
         }
       } catch (err) {
         console.error('File browse error:', err);
+        showToast('File browse error: ' + err.message);
       }
     }
 

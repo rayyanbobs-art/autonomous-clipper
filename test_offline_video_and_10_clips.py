@@ -182,8 +182,7 @@ class TestOfflineVideoAndTenClips(unittest.TestCase):
             self.assertIn("suggestions", data)
 
         # Browse file endpoint response structure
-        with patch("tkinter.filedialog.askopenfilename", return_value=str(dummy_video)), \
-             patch("tkinter.Tk"):
+        with patch("app.open_native_file_dialog", return_value=str(dummy_video)):
             res_browse = client.post("/api/browse-local-file")
             self.assertEqual(res_browse.status_code, 200)
             data_browse = res_browse.get_json()

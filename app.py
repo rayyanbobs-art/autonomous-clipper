@@ -613,34 +613,63 @@ def open_folder():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/api/browse-local-file", methods=["POST", "GET"])
-def browse_local_file():
+def open_native_file_dialog() -> str:
     """Opens native Windows file dialog to select an offline video file."""
     selected_path = ""
-    def _open():
-        nonlocal selected_path
+    # 1. On Windows, use PowerShell System.Windows.Forms for guaranteed foreground focus
+    if os.name == "nt":
         try:
-            import tkinter as tk
-            from tkinter import filedialog
-            root = tk.Tk()
-            root.withdraw()
-            root.attributes("-topmost", True)
-            selected_path = filedialog.askopenfilename(
-                title="Select Offline Video File to Clip",
-                filetypes=[
-                    ("Video Files", "*.mp4;*.mkv;*.mov;*.webm;*.avi;*.flv;*.ts;*.m4v"),
-                    ("All Files", "*.*")
-                ]
+            ps_script = (
+                "Add-Type -AssemblyName System.Windows.Forms; "
+                "$dialog = New-Object System.Windows.Forms.OpenFileDialog; "
+                "$dialog.Title = 'Select Offline Video File to Clip'; "
+                "$dialog.Filter = 'Video Files (*.mp4;*.mkv;*.mov;*.webm;*.avi;*.flv;*.ts;*.m4v)|*.mp4;*.mkv;*.mov;*.webm;*.avi;*.flv;*.ts;*.m4v|All Files (*.*)|*.*'; "
+                "$dialog.Multiselect = $false; "
+                "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { "
+                "    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; "
+                "    Write-Output $dialog.FileName "
+                "}"
             )
-            root.destroy()
+            cmd = ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_script]
+            res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
+            if res.returncode == 0 and res.stdout.strip():
+                selected_path = res.stdout.strip()
         except Exception as e:
-            print(f"[Browse File Error] {e}", flush=True)
+            print(f"[PowerShell Browse Error] {e}", flush=True)
 
-    t = threading.Thread(target=_open)
-    t.start()
-    t.join(timeout=60)
-    if selected_path:
-        return jsonify({"success": True, "file_path": selected_path})
+    # 2. Fallback to Tkinter if PowerShell didn't return a path
+    if not selected_path:
+        def _open():
+            nonlocal selected_path
+            try:
+                import tkinter as tk
+                from tkinter import filedialog
+                root = tk.Tk()
+                root.withdraw()
+                root.wm_attributes("-topmost", 1)
+                selected_path = filedialog.askopenfilename(
+                    parent=root,
+                    title="Select Offline Video File to Clip",
+                    filetypes=[
+                        ("Video Files", "*.mp4;*.mkv;*.mov;*.webm;*.avi;*.flv;*.ts;*.m4v"),
+                        ("All Files", "*.*")
+                    ]
+                )
+                root.destroy()
+            except Exception as e:
+                print(f"[Browse File Error] {e}", flush=True)
+
+        t = threading.Thread(target=_open)
+        t.start()
+        t.join(timeout=60)
+
+    return selected_path
+
+@app.route("/api/browse-local-file", methods=["POST", "GET"])
+def browse_local_file():
+    path = open_native_file_dialog()
+    if path and os.path.exists(path):
+        return jsonify({"success": True, "file_path": path})
     return jsonify({"success": False, "file_path": ""})
 
 # ==========================================
