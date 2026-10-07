@@ -205,7 +205,8 @@ def process_video(
     print(f"\n[5/5] Slicing & Rendering 9:16 Vertical Video Shorts with {subtitle_style.replace('_', ' ').title()} Subtitles...")
     created_files = []
 
-    for rank, clip in enumerate(top_clips, 1):
+    def _render_and_package_clip(item):
+        rank, clip = item
         filename_base = f"{video_id}_clip_{rank}_{int(clip['start'])}s"
         output_mp4 = OUTPUT_DIR / f"{filename_base}.mp4"
         meta_json = OUTPUT_DIR / f"{filename_base}.json"
@@ -278,8 +279,6 @@ def process_video(
                 "suggested_hashtags": smart_meta.get("suggested_hashtags", ["#shorts", "#viral"]),
                 "niche": video_context.get("niche") or smart_meta.get("niche", "general_viral"),
                 "seo_topic": (video_context.get("topics") or [None])[0],
-                # See app.py: presence of `seo_topic` is not evidence of a full
-                # transcript, because the backfill writes it too. State the source.
                 "seo_topic_source": "full_transcript",
                 "candidate_titles": smart_meta.get("candidates", []),
                 "platform_metadata": smart_meta.get("platform_metadata", {})
@@ -297,6 +296,17 @@ def process_video(
             ))
 
             file_size_mb = round(output_mp4.stat().st_size / (1024 * 1024), 2)
+            return (output_mp4, file_size_mb, clip, metadata, smart_meta)
+        return None
+
+    import concurrent.futures
+    workers = min(2, len(top_clips)) if len(top_clips) > 1 else 1
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        rendered_results = list(executor.map(_render_and_package_clip, enumerate(top_clips, 1)))
+
+    for res in rendered_results:
+        if res:
+            output_mp4, file_size_mb, clip, metadata, smart_meta = res
             created_files.append((output_mp4, file_size_mb, clip))
             print(f"  -> SUCCESS: Created {output_mp4.name} ({file_size_mb} MB)")
             print(f"     Title: {metadata['suggested_title']}")
@@ -318,8 +328,6 @@ def process_video(
                 )
                 if up_res.get("success"):
                     print(f"  [Auto-Upload Success] Clip uploaded successfully!")
-        else:
-            print(f"  -> FAILED to render clip #{rank}")
 
     print("\n" + "=" * 60)
     print("  PIPELINE COMPLETE!")

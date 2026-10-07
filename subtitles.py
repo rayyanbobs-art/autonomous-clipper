@@ -409,7 +409,21 @@ SUBTITLE_STYLES = {
 def get_whisper_model(model_name: str = "base.en") -> WhisperModel:
     global _WHISPER_MODEL
     if _WHISPER_MODEL is None:
-        _WHISPER_MODEL = WhisperModel(model_name, device="cpu", compute_type="int8")
+        device = "cpu"
+        compute_type = "int8"
+        try:
+            import ctranslate2
+            if ctranslate2.get_cuda_device_count() > 0:
+                device = "cuda"
+                compute_type = "float16"
+        except Exception:
+            pass
+        try:
+            _WHISPER_MODEL = WhisperModel(model_name, device=device, compute_type=compute_type)
+            if device == "cuda":
+                print(f"  [Whisper Acceleration] Loaded {model_name} on NVIDIA CUDA GPU.")
+        except Exception:
+            _WHISPER_MODEL = WhisperModel(model_name, device="cpu", compute_type="int8")
     return _WHISPER_MODEL
 
 def to_ass_timestamp(seconds: float) -> str:

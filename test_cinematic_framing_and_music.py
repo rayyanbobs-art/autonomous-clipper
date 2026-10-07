@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 import tempfile
+import subprocess
 import cv2
 import numpy as np
 
@@ -73,10 +74,13 @@ class TestCinematicFramingAndMusic(unittest.TestCase):
         clip_id = "test1234"
         raw_fake = TEMP_DIR / f"raw_0_10_{clip_id}.mp4"
 
+        orig_sp_run = subprocess.run
         def mock_sp_run(cmd, *args, **kwargs):
             cmd_str = " ".join(str(c) for c in cmd) if isinstance(cmd, list) else str(cmd)
             if "yt_dlp" in cmd_str:
                 raw_fake.write_bytes(b"dummy")
+            if isinstance(cmd, list) and "-f" in cmd and "null" in cmd:
+                return orig_sp_run(cmd, *args, **kwargs)
             m = MagicMock()
             m.returncode = 0
             return m
@@ -106,10 +110,10 @@ class TestCinematicFramingAndMusic(unittest.TestCase):
                     enable_punch_zooms=False
                 )
 
-                # Inspect FFmpeg command line passed to subprocess.run
-                ffmpeg_calls = [c for c in mock_run.call_args_list if "ffmpeg" in str(c[0][0][0]).lower()]
-                self.assertGreater(len(ffmpeg_calls), 0)
-                call_args = ffmpeg_calls[0][0][0]
+                # Inspect FFmpeg render command line passed to subprocess.run
+                render_calls = [c for c in mock_run.call_args_list if isinstance(c[0][0], list) and "-filter_complex" in c[0][0]]
+                self.assertGreater(len(render_calls), 0)
+                call_args = render_calls[0][0][0]
                 filter_complex_idx = call_args.index("-filter_complex") + 1
                 fc = call_args[filter_complex_idx]
 
@@ -123,6 +127,7 @@ class TestCinematicFramingAndMusic(unittest.TestCase):
                 self.assertIn("afade=t=in", fc)
                 self.assertIn("afade=t=out", fc)
             finally:
+                video_cutter._BEST_ENCODER_INFO = None
                 if raw_fake.exists():
                     raw_fake.unlink()
 

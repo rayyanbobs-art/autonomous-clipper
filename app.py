@@ -243,12 +243,12 @@ def run_clipping_job(
 
         job["step"] = f"Rendering {len(top_clips)} 9:16 vertical Shorts{render_note} with FFmpeg..."
         completed_clips = []
+        completed_lock = threading.Lock()
+        rendered_done_count = 0
 
-        for rank, clip in enumerate(top_clips, 1):
-            pct_render = 60 + int((rank / len(top_clips)) * 35)
-            job["progress"] = pct_render
-            job["step"] = f"Formatting Clip #{rank} of {len(top_clips)} with {subtitle_style.replace('_', ' ').title()} subtitles..."
-
+        def _render_app_clip(item):
+            nonlocal rendered_done_count
+            rank, clip = item
             filename_base = f"{video_id}_clip_{rank}_{int(clip['start'])}s"
             output_mp4 = OUTPUT_DIR / f"{filename_base}.mp4"
             meta_json = OUTPUT_DIR / f"{filename_base}.json"
@@ -270,6 +270,12 @@ def run_clipping_job(
                 enable_bg_music=enable_bg_music,
                 bg_music_volume=bg_music_volume
             )
+
+            with completed_lock:
+                rendered_done_count += 1
+                pct_render = 60 + int((rendered_done_count / len(top_clips)) * 35)
+                job["progress"] = pct_render
+                job["step"] = f"Rendered {rendered_done_count} of {len(top_clips)} clips with {subtitle_style.replace('_', ' ').title()} subtitles..."
 
             if success and output_mp4.exists():
                 cat_formatted = clip.get("category", "high_value_insight").replace("_", " ").title()
@@ -311,10 +317,6 @@ def run_clipping_job(
                     "suggested_hashtags": suggested_hashtags,
                     "niche": video_context.get("niche") or smart_meta.get("niche", "general_viral"),
                     "seo_topic": (video_context.get("topics") or [None])[0],
-                    # Provenance, explicit. PRESENCE of `seo_topic` used to be read as
-                    # "a producer had the full transcript" -- but backfill_titles.py writes
-                    # the same key from 30 s snippet unions, so the marker became
-                    # self-certifying and stopped meaning anything. State the source.
                     "seo_topic_source": "full_transcript",
                     "candidate_titles": smart_meta.get("candidates", []),
                     "platform_metadata": smart_meta.get("platform_metadata", {})
@@ -330,8 +332,6 @@ def run_clipping_job(
                     standalone_probability=metadata.get("standalone_probability"),
                     sponsor_probability=metadata.get("sponsor_probability"),
                 ))
-
-                completed_clips.append(metadata)
 
                 # Background auto-upload if enabled
                 upload_cfg = load_upload_config()
@@ -350,6 +350,17 @@ def run_clipping_job(
                         },
                         daemon=True
                     ).start()
+
+                return metadata
+            return None
+
+        import concurrent.futures
+        workers = min(2, len(top_clips)) if len(top_clips) > 1 else 1
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            raw_rendered = list(executor.map(_render_app_clip, enumerate(top_clips, 1)))
+
+        completed_clips = [c for c in raw_rendered if c is not None]
+        completed_clips.sort(key=lambda x: x["rank"])
 
         if not completed_clips:
             raise RuntimeError("Failed to render any output video clips.")

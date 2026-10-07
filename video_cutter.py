@@ -26,6 +26,48 @@ def get_ffmpeg_path() -> str:
             return str(f)
     raise RuntimeError("ffmpeg not found on system PATH.")
 
+_BEST_ENCODER_INFO: Optional[Tuple[str, List[str]]] = None
+
+def get_best_video_encoder(ffmpeg_exe: str = "ffmpeg") -> Tuple[str, List[str]]:
+    """
+    Probes system for hardware-accelerated H.264 video encoders:
+      1. NVIDIA NVENC (h264_nvenc)
+      2. AMD AMF (h264_amf)
+      3. Intel QuickSync (h264_qsv)
+      4. CPU Software Fallback (libx264)
+    Returns: (codec_name, encoding_arguments)
+    """
+    global _BEST_ENCODER_INFO
+    if _BEST_ENCODER_INFO is not None:
+        return _BEST_ENCODER_INFO
+
+    candidates = [
+        ("h264_nvenc", ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "19", "-pix_fmt", "yuv420p"]),
+        ("h264_amf", ["-c:v", "h264_amf", "-quality", "speed", "-rc", "cqp", "-qp_p", "19", "-qp_i", "19", "-pix_fmt", "yuv420p"]),
+        ("h264_qsv", ["-c:v", "h264_qsv", "-preset", "veryfast", "-global_quality", "19", "-pix_fmt", "yuv420p"]),
+        ("libx264", ["-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p"])
+    ]
+
+    for enc_name, flags in candidates:
+        if enc_name == "libx264":
+            _BEST_ENCODER_INFO = (enc_name, flags)
+            return _BEST_ENCODER_INFO
+        try:
+            test_cmd = [
+                ffmpeg_exe, "-y", "-f", "lavfi", "-i", "color=c=black:s=256x256:d=0.04",
+                *flags, "-f", "null", "-"
+            ]
+            res = subprocess.run(test_cmd, capture_output=True, text=True, timeout=5)
+            if res.returncode == 0:
+                print(f"  [Hardware Acceleration] Enabled {enc_name} GPU encoder.")
+                _BEST_ENCODER_INFO = (enc_name, flags)
+                return _BEST_ENCODER_INFO
+        except Exception:
+            continue
+
+    _BEST_ENCODER_INFO = ("libx264", ["-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p"])
+    return _BEST_ENCODER_INFO
+
 def get_video_duration(video_path: Path, ffmpeg_exe: str = "ffmpeg") -> float:
     """Retrieves total duration of a video file using ffprobe."""
     ffprobe_exe = shutil.which("ffprobe")
@@ -332,10 +374,11 @@ def cut_and_format_clip(
         # Whisper, face tracking, cleanup) works on and deletes `actual_downloaded`, so it
         # must never be the user's original video.
         print(f"  [Local Video] Slicing section {start_sec}s -> {end_sec}s from {p_in.name}...")
+        _, enc_flags = get_best_video_encoder(ffmpeg_exe)
         slice_cmd = [
             ffmpeg_exe, "-y", "-ss", f"{start_sec:.3f}", "-i", str(p_in),
             "-t", f"{max(0.1, end_sec - start_sec):.3f}",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+            *enc_flags,
             "-c:a", "aac", "-b:a", "192k",
             str(temp_clip_raw)
         ]
@@ -606,7 +649,9 @@ def cut_and_format_clip(
             )
             if voice_output_label:
                 filter_parts.append(
-                    f"[{voice_output_label}][music_bed]amix=inputs=2:duration=first:dropout_transition=0[a]"
+                    f"[{voice_output_label}]asplit=2[voice_for_mix][voice_for_duck];"
+                    f"[music_bed][voice_for_duck]sidechaincompress=threshold=0.08:ratio=4:attack=20:release=350[music_ducked];"
+                    f"[voice_for_mix][music_ducked]amix=inputs=2:duration=first:dropout_transition=0[a]"
                 )
                 audio_map = "[a]"
             else:
@@ -618,7 +663,9 @@ def cut_and_format_clip(
             )
             if voice_output_label:
                 filter_parts.append(
-                    f"[{voice_output_label}][music_synth]amix=inputs=2:duration=first:dropout_transition=0[a]"
+                    f"[{voice_output_label}]asplit=2[voice_for_mix][voice_for_duck];"
+                    f"[music_synth][voice_for_duck]sidechaincompress=threshold=0.08:ratio=4:attack=20:release=350[music_ducked];"
+                    f"[voice_for_mix][music_ducked]amix=inputs=2:duration=first:dropout_transition=0[a]"
                 )
                 audio_map = "[a]"
             else:
@@ -649,6 +696,8 @@ def cut_and_format_clip(
 
     temp_main_rendered = (TEMP_DIR / f"main_{int(start_sec)}_{int(end_sec)}_{clip_id}.mp4") if enable_outro else output_path
 
+    _, enc_flags = get_best_video_encoder(ffmpeg_exe)
+
     ffmpeg_cmd = [
         ffmpeg_exe,
         "-y",
@@ -663,10 +712,7 @@ def cut_and_format_clip(
         "-filter_complex", filter_complex,
         "-map", "[v]",
         "-map", audio_map,
-        "-c:v", "libx264",
-        "-preset", "medium",
-        "-crf", "18",
-        "-pix_fmt", "yuv420p",
+        *enc_flags,
         "-c:a", "aac",
         "-b:a", "192k",
         "-shortest",
@@ -674,10 +720,7 @@ def cut_and_format_clip(
         str(temp_main_rendered),
         "-map", "[current_clean]",
         "-map", audio_clean_map,
-        "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "18",
-        "-pix_fmt", "yuv420p",
+        *enc_flags,
         "-c:a", "aac",
         "-b:a", "192k",
         "-shortest",
@@ -741,10 +784,7 @@ def cut_and_format_clip(
                 "-filter_complex", concat_filter,
                 "-map", "[v]",
                 "-map", "[a]",
-                "-c:v", "libx264",
-                "-preset", "medium",
-                "-crf", "18",
-                "-pix_fmt", "yuv420p",
+                *enc_flags,
                 "-c:a", "aac",
                 "-b:a", "192k",
                 "-movflags", "+faststart",
