@@ -12,6 +12,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 from typing import Optional, Any
 from config import (
     OUTPUT_DIR,
+    TEMP_DIR,
     get_jev_api_key,
     MIN_CLIP_DURATION,
     MAX_CLIP_DURATION,
@@ -39,6 +40,8 @@ from uploader import (
 import hyperframes_editor
 
 app = Flask(__name__)
+# Allow local offline video uploads up to 32 GB
+app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024 * 1024
 
 # In-memory job tracker
 JOBS = {}
@@ -671,6 +674,30 @@ def browse_local_file():
     if path and os.path.exists(path):
         return jsonify({"success": True, "file_path": path})
     return jsonify({"success": False, "file_path": ""})
+
+@app.route("/api/upload-local-file", methods=["POST"])
+def upload_local_file():
+    """Accepts local video file uploaded directly from browser and saves to temp/local_uploads/."""
+    try:
+        if "file" not in request.files:
+            return jsonify({"success": False, "error": "No file in request"}), 400
+        file = request.files["file"]
+        if not file.filename:
+            return jsonify({"success": False, "error": "Empty filename"}), 400
+
+        upload_dir = TEMP_DIR / "local_uploads"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        save_path = upload_dir / file.filename
+        file.save(str(save_path))
+
+        return jsonify({
+            "success": True,
+            "file_path": str(save_path.resolve()),
+            "filename": file.filename,
+            "size": save_path.stat().st_size
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 # ==========================================
 # NICHE FINDER & OUTLIER EXPLORER ENDPOINTS

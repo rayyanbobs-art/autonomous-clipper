@@ -189,6 +189,18 @@ class TestOfflineVideoAndTenClips(unittest.TestCase):
             self.assertTrue(data_browse.get("success"))
             self.assertEqual(data_browse.get("file_path"), str(dummy_video))
 
+        # Upload local file endpoint response structure
+        import io
+        upload_data = {
+            "file": (io.BytesIO(b"my_raw_video_bytes"), "test_local_clip.mp4")
+        }
+        res_upload = client.post("/api/upload-local-file", data=upload_data, content_type="multipart/form-data")
+        self.assertEqual(res_upload.status_code, 200)
+        data_upload = res_upload.get_json()
+        self.assertTrue(data_upload.get("success"))
+        self.assertEqual(data_upload.get("filename"), "test_local_clip.mp4")
+        self.assertTrue(Path(data_upload.get("file_path")).exists())
+
 
 if __name__ == "__main__":
     unittest.main()

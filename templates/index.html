@@ -163,6 +163,13 @@
               placeholder="Paste YouTube Link or local video path (e.g. D:\Videos\podcast.mp4)"
               class="w-full pl-12 pr-48 py-4 bg-slate-900/90 border border-slate-700/80 rounded-xl text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition shadow-inner"
             />
+            <input
+              id="localFileInput"
+              type="file"
+              accept="video/*,.mp4,.mkv,.mov,.webm,.avi,.flv,.ts,.m4v"
+              class="hidden"
+              onchange="handleLocalFileSelected(this)"
+            />
             <div class="absolute inset-y-2 right-2 flex items-center gap-1.5">
               <button
                 type="button"
@@ -1841,29 +1848,64 @@
       });
     }
 
-    async function browseLocalFile() {
+    function browseLocalFile() {
+      const picker = document.getElementById('localFileInput');
+      if (picker) {
+        picker.value = '';
+        picker.click();
+      }
+    }
+
+    async function handleLocalFileSelected(input) {
+      if (!input.files || input.files.length === 0) return;
+      const file = input.files[0];
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      showToast(`Importing offline video: ${file.name} (${sizeMb} MB)...`);
+
+      const formData = new FormData();
+      formData.append('file', file);
+
       try {
-        showToast('Opening Windows file browser...');
-        const res = await fetch('/api/browse-local-file', { method: 'POST' });
-        if (!res.ok) {
-          showToast('Server returned error ' + res.status + '. Is the server running?');
-          return;
-        }
-        const data = await res.json();
-        if (data.success && data.file_path) {
-          const input = document.getElementById('urlInput');
-          if (input) {
-            input.value = data.file_path;
-            const filename = data.file_path.split(/[\\/]/).pop();
-            showToast(`Selected offline video: ${filename}`);
-            fetchRangeSuggestions(data.file_path);
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/upload-local-file', true);
+
+        xhr.upload.onprogress = function(e) {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            showToast(`Importing offline video: ${pct}%...`);
           }
-        } else {
-          showToast('No file selected');
-        }
+        };
+
+        xhr.onload = function() {
+          if (xhr.status === 200) {
+            try {
+              const data = JSON.parse(xhr.responseText);
+              if (data.success && data.file_path) {
+                const urlInput = document.getElementById('urlInput');
+                if (urlInput) {
+                  urlInput.value = data.file_path;
+                  showToast(`Selected offline video: ${data.filename}`);
+                  fetchRangeSuggestions(data.file_path);
+                }
+              } else {
+                showToast('Failed to load video: ' + (data.error || 'Server error'));
+              }
+            } catch (err) {
+              showToast('Failed to parse upload response');
+            }
+          } else {
+            showToast('Upload error: HTTP ' + xhr.status);
+          }
+        };
+
+        xhr.onerror = function() {
+          showToast('Network error while importing local video');
+        };
+
+        xhr.send(formData);
       } catch (err) {
-        console.error('File browse error:', err);
-        showToast('File browse error: ' + err.message);
+        console.error('File load error:', err);
+        showToast('Error importing video: ' + err.message);
       }
     }
 
@@ -3496,6 +3538,22 @@
         });
         urlInput.addEventListener('change', (e) => {
           fetchRangeSuggestions(e.target.value);
+        });
+
+        urlInput.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          urlInput.classList.add('ring-2', 'ring-indigo-500');
+        });
+        urlInput.addEventListener('dragleave', (e) => {
+          e.preventDefault();
+          urlInput.classList.remove('ring-2', 'ring-indigo-500');
+        });
+        urlInput.addEventListener('drop', (e) => {
+          e.preventDefault();
+          urlInput.classList.remove('ring-2', 'ring-indigo-500');
+          if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            handleLocalFileSelected({ files: e.dataTransfer.files });
+          }
         });
       }
     });
