@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import uuid
+import shutil
 import threading
 import subprocess
 from pathlib import Path
@@ -17,8 +18,8 @@ from config import (
     CLIP_WINDOW_STEP,
 )
 from scorer import create_windows, critique_gate_search, parse_timestamp_to_seconds
-from video_cutter import cut_and_format_clip
-from clipper import extract_video_id, get_transcript
+from video_cutter import cut_and_format_clip, get_video_duration
+from clipper import extract_video_id, get_transcript, is_local_video, get_local_transcript
 from subtitles import SUBTITLE_STYLES
 from niche_scraper import search_niche_channels, get_channel_details, get_video_transcript
 from niche_analyzer import analyze_channel_outliers, analyze_hook_and_pacing
@@ -35,6 +36,7 @@ from uploader import (
     load_upload_config, save_upload_config, get_youtube_auth_url,
     exchange_youtube_code, start_youtube_local_auth, upload_clip_to_platforms
 )
+import hyperframes_editor
 
 app = Flask(__name__)
 
@@ -148,14 +150,20 @@ def run_clipping_job(
         job["progress"] = 5
         job["step"] = "Extracting video details..."
 
+        is_local = is_local_video(youtube_url)
         video_id = extract_video_id(youtube_url)
-        clean_url = f"https://www.youtube.com/watch?v={video_id}"
+        clean_url = str(Path(str(youtube_url).strip('"').strip("'")).resolve()) if is_local else f"https://www.youtube.com/watch?v={video_id}"
 
         job["progress"] = 15
-        job["step"] = "Fetching YouTube captions & transcript..."
-        transcript = get_transcript(video_id)
+        if is_local:
+            job["step"] = f"Transcribing local video with faster-whisper ({Path(clean_url).name})..."
+            transcript = get_local_transcript(Path(clean_url), video_id=video_id)
+        else:
+            job["step"] = "Fetching YouTube captions & transcript..."
+            transcript = get_transcript(video_id)
+
         if not transcript:
-            raise RuntimeError("No captions or transcript found for this video. Please ensure the video has English captions enabled.")
+            raise RuntimeError("No captions or transcript found for this video. Please ensure the video has English captions or speech enabled.")
 
         # Video-level context: computed ONCE from the whole transcript, then reused by
         # every clip so titles, niche and hashtags stay consistent across the job.
@@ -181,9 +189,10 @@ def run_clipping_job(
             range_start=r_start,
             range_end=r_end
         )
-        if max_candidates and max_candidates > 0 and len(candidate_windows) > max_candidates:
-            stride = len(candidate_windows) / max_candidates
-            candidate_windows = [candidate_windows[int(i * stride)] for i in range(max_candidates)]
+        effective_candidates = max(max_candidates or 15, top_k * 4)
+        if effective_candidates > 0 and len(candidate_windows) > effective_candidates:
+            stride = len(candidate_windows) / effective_candidates
+            candidate_windows = [candidate_windows[int(i * stride)] for i in range(effective_candidates)]
         if not candidate_windows:
             raise RuntimeError("Could not find suitable candidate segments in transcript.")
 
@@ -390,13 +399,21 @@ def suggest_ranges():
     try:
         video_id = extract_video_id(url)
     except Exception as e:
-        return jsonify({"success": False, "error": f"Invalid YouTube URL: {e}"}), 400
+        return jsonify({"success": False, "error": f"Invalid URL or file path: {e}"}), 400
 
     try:
-        transcript = get_transcript(video_id)
-        if not transcript:
-            return jsonify({"success": False, "error": "No captions available for this video."}), 404
-        total_seconds = float(transcript[-1]["start"] + transcript[-1]["duration"])
+        if is_local_video(url):
+            dur = get_video_duration(Path(url.strip('"').strip("'")))
+            if dur > 0:
+                total_seconds = float(dur)
+            else:
+                transcript = get_local_transcript(Path(url.strip('"').strip("'")), video_id=video_id)
+                total_seconds = float(transcript[-1]["start"] + transcript[-1]["duration"]) if transcript else 0.0
+        else:
+            transcript = get_transcript(video_id)
+            if not transcript:
+                return jsonify({"success": False, "error": "No captions available for this video."}), 404
+            total_seconds = float(transcript[-1]["start"] + transcript[-1]["duration"])
     except Exception as e:
         return jsonify({"success": False, "error": f"Could not fetch video metadata: {e}"}), 500
 
@@ -515,7 +532,7 @@ def generate():
     time_range_end = data.get("time_range_end")
 
     if not url:
-        return jsonify({"error": "Please provide a valid YouTube video URL."}), 400
+        return jsonify({"error": "Please provide a valid YouTube video URL or local video file path."}), 400
 
     job_id = str(uuid.uuid4())[:8]
     JOBS[job_id] = {
@@ -595,6 +612,36 @@ def open_folder():
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/api/browse-local-file", methods=["POST", "GET"])
+def browse_local_file():
+    """Opens native Windows file dialog to select an offline video file."""
+    selected_path = ""
+    def _open():
+        nonlocal selected_path
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            selected_path = filedialog.askopenfilename(
+                title="Select Offline Video File to Clip",
+                filetypes=[
+                    ("Video Files", "*.mp4;*.mkv;*.mov;*.webm;*.avi;*.flv;*.ts;*.m4v"),
+                    ("All Files", "*.*")
+                ]
+            )
+            root.destroy()
+        except Exception as e:
+            print(f"[Browse File Error] {e}", flush=True)
+
+    t = threading.Thread(target=_open)
+    t.start()
+    t.join(timeout=60)
+    if selected_path:
+        return jsonify({"success": True, "file_path": selected_path})
+    return jsonify({"success": False, "file_path": ""})
 
 # ==========================================
 # NICHE FINDER & OUTLIER EXPLORER ENDPOINTS
@@ -858,6 +905,115 @@ def api_upload_clip():
         privacy_status=privacy
     )
     return jsonify(res)
+
+
+HF_JOBS = {}
+
+@app.route("/api/hyperframes/styles", methods=["GET"])
+def api_hf_styles():
+    return jsonify({"success": True, "styles": hyperframes_editor.STYLES})
+
+@app.route("/api/hyperframes/preview", methods=["POST"])
+def api_hf_preview():
+    data = request.get_json(silent=True) or {}
+    filename = data.get("filename", "").strip()
+    style = data.get("style", "viral_pop")
+    badge = data.get("badge", "")
+    zoom = data.get("zoom", "dynamic")
+    
+    if not filename:
+        return jsonify({"success": False, "error": "Filename required"}), 400
+        
+    clip_path = OUTPUT_DIR / filename
+    if not clip_path.exists():
+        return jsonify({"success": False, "error": f"File not found: {filename}"}), 404
+        
+    try:
+        res = hyperframes_editor.setup_and_render_preview(
+            input_video_path=clip_path,
+            style_key=style,
+            badge_text=badge,
+            zoom_intensity=zoom
+        )
+        sheet_path = Path(res["contact_sheet"])
+        dest_sheet_name = f"{clip_path.stem}_hf_preview.jpg"
+        dest_sheet = OUTPUT_DIR / dest_sheet_name
+        shutil.copy2(sheet_path, dest_sheet)
+        
+        return jsonify({
+            "success": True,
+            "preview_url": f"/output/{dest_sheet_name}",
+            "duration": res["duration"],
+            "word_count": res["word_count"],
+            "zoom_count": res["zoom_count"]
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/hyperframes/render", methods=["POST"])
+def api_hf_render():
+    data = request.get_json(silent=True) or {}
+    filename = data.get("filename", "").strip()
+    style = data.get("style", "viral_pop")
+    badge = data.get("badge", "")
+    zoom = data.get("zoom", "dynamic")
+    
+    if not filename:
+        return jsonify({"success": False, "error": "Filename required"}), 400
+        
+    clip_path = OUTPUT_DIR / filename
+    if not clip_path.exists():
+        return jsonify({"success": False, "error": f"File not found: {filename}"}), 404
+        
+    job_id = f"hf_{uuid.uuid4().hex[:8]}"
+    HF_JOBS[job_id] = {
+        "status": "rendering",
+        "progress": 10,
+        "step": "Setting up Hyperframes composition...",
+        "result": None,
+        "error": None
+    }
+    
+    def _run_hf_render():
+        try:
+            HF_JOBS[job_id]["step"] = "Preparing composition and assets..."
+            HF_JOBS[job_id]["progress"] = 30
+            hyperframes_editor.setup_and_render_preview(
+                input_video_path=clip_path,
+                style_key=style,
+                badge_text=badge,
+                zoom_intensity=zoom
+            )
+            
+            HF_JOBS[job_id]["step"] = "Rendering master 1080x1920 MP4 with Hyperframes..."
+            HF_JOBS[job_id]["progress"] = 60
+            prefix = clip_path.stem
+            out = hyperframes_editor.render_final_deliverables(prefix, output_dir=OUTPUT_DIR)
+            
+            HF_JOBS[job_id]["progress"] = 100
+            HF_JOBS[job_id]["status"] = "completed"
+            HF_JOBS[job_id]["step"] = "Done!"
+            HF_JOBS[job_id]["result"] = {
+                "master_filename": Path(out["master_path"]).name,
+                "preview_filename": Path(out["preview_path"]).name,
+                "master_url": f"/output/{Path(out['master_path']).name}",
+                "preview_url": f"/output/{Path(out['preview_path']).name}",
+                "master_size": out["master_size"],
+                "preview_size": out["preview_size"]
+            }
+        except Exception as err:
+            HF_JOBS[job_id]["status"] = "failed"
+            HF_JOBS[job_id]["error"] = str(err)
+            
+    threading.Thread(target=_run_hf_render, daemon=True).start()
+    return jsonify({"success": True, "job_id": job_id})
+
+@app.route("/api/hyperframes/status/<job_id>", methods=["GET"])
+def api_hf_status(job_id):
+    job = HF_JOBS.get(job_id)
+    if not job:
+        return jsonify({"success": False, "error": "Job not found"}), 404
+    return jsonify({"success": True, "job": job})
 
 
 if __name__ == "__main__":

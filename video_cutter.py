@@ -323,13 +323,31 @@ def cut_and_format_clip(
     is_local_file = False
     try:
         p_in = Path(youtube_url)
-        if p_in.is_file():
-            is_local_file = True
-            actual_downloaded = p_in
+        is_local_file = p_in.is_file()
     except Exception:
         is_local_file = False
 
-    if not is_local_file:
+    if is_local_file:
+        # Cut the requested segment into a temp file. Everything downstream (snappy cuts,
+        # Whisper, face tracking, cleanup) works on and deletes `actual_downloaded`, so it
+        # must never be the user's original video.
+        print(f"  [Local Video] Slicing section {start_sec}s -> {end_sec}s from {p_in.name}...")
+        slice_cmd = [
+            ffmpeg_exe, "-y", "-ss", f"{start_sec:.3f}", "-i", str(p_in),
+            "-t", f"{max(0.1, end_sec - start_sec):.3f}",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+            "-c:a", "aac", "-b:a", "192k",
+            str(temp_clip_raw)
+        ]
+        proc = subprocess.run(slice_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if proc.returncode != 0:
+            print(f"  [Local Video Error] {proc.stderr[-300:]}")
+            return False
+        if temp_clip_raw.exists():
+            actual_downloaded = temp_clip_raw
+        else:
+            actual_downloaded = p_in
+    else:
         download_section_arg = f"*{start_sec:.2f}-{end_sec:.2f}"
         ffmpeg_dir = str(Path(ffmpeg_exe).parent)
         ytdlp_cmd = [
@@ -372,7 +390,7 @@ def cut_and_format_clip(
         try:
             if apply_snappy_silence_cuts(actual_downloaded, snappy_clip, min_silence_sec=0.28, silence_thresh_db=-28.0, ffmpeg_exe=ffmpeg_exe):
                 print(f"  [Jump-Cuts] Truncated dead-air pauses into snappy jump-cuts -> {snappy_clip.name}")
-                if actual_downloaded.exists():
+                if actual_downloaded.exists() and actual_downloaded != p_in:
                     try:
                         actual_downloaded.unlink()
                     except Exception:
@@ -536,12 +554,14 @@ def cut_and_format_clip(
         )
         current_top = next_top
 
-    # Burn subtitles on the topmost video layer
+    # Burn subtitles on the topmost video layer and keep clean stream for Hyperframes
+    clean_target = output_path.with_name(f"{output_path.stem}_clean.mp4")
     if has_subtitles and temp_ass.exists():
         escaped_ass = str(temp_ass.resolve()).replace("\\", "/").replace(":", r"\:")
-        filter_parts.append(f"[{current_top}]subtitles='{escaped_ass}'[v]")
+        filter_parts.append(f"[{current_top}]split=2[current_clean][current_for_sub]")
+        filter_parts.append(f"[current_for_sub]subtitles='{escaped_ass}'[v]")
     else:
-        filter_parts.append(f"[{current_top}]null[v]")
+        filter_parts.append(f"[{current_top}]split=2[current_clean][v]")
 
     # Step 3.8: Audio Pipeline (Voice + Censorship Bleep + Atmospheric Background Music Bed)
     clip_dur = get_video_duration(actual_downloaded, ffmpeg_exe) or (end_sec - start_sec) or 30.0
@@ -613,8 +633,17 @@ def cut_and_format_clip(
     # loudnorm upsamples to 192kHz internally, so resample back to 48kHz for AAC.
     norm_in = ("0:a" if has_source_audio else None) if audio_map == "0:a?" else audio_map.strip("[]")
     if norm_in:
-        filter_parts.append(f"[{norm_in}]loudnorm=I=-14:TP=-1.0:LRA=11,aresample=48000[a_norm]")
+        filter_parts.append(f"[{norm_in}]loudnorm=I=-14:TP=-1.0:LRA=11,aresample=48000,asplit=2[a_norm][a_norm_clean]")
         audio_map = "[a_norm]"
+        audio_clean_map = "[a_norm_clean]"
+    else:
+        if audio_map.startswith("[") and audio_map.endswith("]"):
+            base_label = audio_map.strip("[]")
+            filter_parts.append(f"[{base_label}]asplit=2[{base_label}_out1][{base_label}_out2]")
+            audio_map = f"[{base_label}_out1]"
+            audio_clean_map = f"[{base_label}_out2]"
+        else:
+            audio_clean_map = audio_map
 
     filter_complex = ";".join(filter_parts)
 
@@ -642,7 +671,18 @@ def cut_and_format_clip(
         "-b:a", "192k",
         "-shortest",
         "-movflags", "+faststart",
-        str(temp_main_rendered)
+        str(temp_main_rendered),
+        "-map", "[current_clean]",
+        "-map", audio_clean_map,
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "18",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-shortest",
+        "-movflags", "+faststart",
+        str(clean_target)
     ])
 
     print(f"  [FFmpeg] Rendering 9:16 Short (B-Rolls: {len(broll_items)}, Framing: {framing_mode}, Zooms: {len(spikes)}) -> {temp_main_rendered.name}...")
@@ -652,12 +692,6 @@ def cut_and_format_clip(
         print(f"  [FFmpeg Error] Rendering timed out after 600s: {te}")
         return False
 
-    # Cleanup temp video slices
-    if actual_downloaded.exists() and not is_local_file:
-        try:
-            actual_downloaded.unlink()
-        except Exception:
-            pass
     if temp_ass.exists():
         try:
             temp_ass.unlink()
@@ -665,7 +699,12 @@ def cut_and_format_clip(
             pass
 
     if ff_proc.returncode != 0:
-        print(f"  [FFmpeg Error] {ff_proc.stderr[:400]}")
+        if actual_downloaded.exists() and actual_downloaded != p_in:
+            try:
+                actual_downloaded.unlink()
+            except Exception:
+                pass
+        print(f"  [FFmpeg Error] {ff_proc.stderr[-600:]}")
         return False
 
     # Step 5: Append 1-second high-contrast SUBSCRIBE outro card
@@ -773,5 +812,11 @@ def cut_and_format_clip(
         print(f"  [EDL] Saved continuity EDL payload -> {edl_path.name}")
     except Exception as e_edl:
         print(f"  [EDL Warning] Failed to write EDL payload: {e_edl}")
+    finally:
+        if actual_downloaded and actual_downloaded.exists() and actual_downloaded != p_in:
+            try:
+                actual_downloaded.unlink()
+            except Exception:
+                pass
 
     return True

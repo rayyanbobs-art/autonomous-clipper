@@ -59,8 +59,10 @@ class TestCustomRangeAndNoSubs(unittest.TestCase):
         captured_cmd = []
         def fake_run(cmd, *args, **kwargs):
             captured_cmd.append(cmd)
-            out_file = Path(cmd[-1])
-            out_file.write_bytes(b"mock_mp4_output")
+            for item in cmd:
+                s_item = str(item)
+                if s_item.endswith(".mp4") and s_item != str(dummy_vid):
+                    Path(s_item).write_bytes(b"mock_mp4_output")
             m = MagicMock()
             m.returncode = 0
             return m
@@ -93,9 +95,9 @@ class TestCustomRangeAndNoSubs(unittest.TestCase):
             fc_idx = render_cmds[0].index("-filter_complex")
             filter_complex = render_cmds[0][fc_idx + 1]
 
-            # Invariant: subtitles filter MUST be absent, null filter MUST pass through
+            # Invariant: subtitles filter MUST be absent, clean/main split MUST pass through to [v]
             self.assertNotIn("subtitles=", filter_complex)
-            self.assertIn("null[v]", filter_complex)
+            self.assertIn("[v]", filter_complex)
 
     def test_03_create_windows_time_range_slicing(self):
         """Verify create_windows strictly confines candidate generation to [range_start, range_end]."""

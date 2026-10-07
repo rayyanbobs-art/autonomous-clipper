@@ -160,16 +160,26 @@
               id="urlInput"
               type="text"
               required
-              placeholder="Paste YouTube Link or Video ID (e.g. https://www.youtube.com/watch?v=...)"
-              class="w-full pl-12 pr-28 py-4 bg-slate-900/90 border border-slate-700/80 rounded-xl text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition shadow-inner"
+              placeholder="Paste YouTube Link or local video path (e.g. D:\Videos\podcast.mp4)"
+              class="w-full pl-12 pr-48 py-4 bg-slate-900/90 border border-slate-700/80 rounded-xl text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition shadow-inner"
             />
-            <button
-              type="button"
-              onclick="pasteFromClipboard()"
-              class="absolute inset-y-2 right-2 px-3 flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition border border-slate-700/60"
-            >
-              <i data-lucide="clipboard" class="w-3.5 h-3.5"></i> Paste
-            </button>
+            <div class="absolute inset-y-2 right-2 flex items-center gap-1.5">
+              <button
+                type="button"
+                onclick="browseLocalFile()"
+                class="px-2.5 py-1.5 flex items-center gap-1 text-xs font-medium text-indigo-300 hover:text-white bg-indigo-950/80 hover:bg-indigo-900/80 rounded-lg transition border border-indigo-700/60"
+                title="Select an offline video file from your computer"
+              >
+                <i data-lucide="folder-video" class="w-3.5 h-3.5"></i> Browse
+              </button>
+              <button
+                type="button"
+                onclick="pasteFromClipboard()"
+                class="px-2.5 py-1.5 flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition border border-slate-700/60"
+              >
+                <i data-lucide="clipboard" class="w-3.5 h-3.5"></i> Paste
+              </button>
+            </div>
           </div>
 
           <!-- Custom Video Time-Lapse / Section Slicing Widget -->
@@ -227,6 +237,7 @@
                 <button type="button" onclick="setClipCount(2)" class="clip-count-btn px-3 py-1 text-xs font-semibold rounded-md transition text-slate-400" data-val="2">2</button>
                 <button type="button" onclick="setClipCount(3)" class="clip-count-btn px-3 py-1 text-xs font-semibold rounded-md transition bg-indigo-600 text-white shadow" data-val="3">3 (Best)</button>
                 <button type="button" onclick="setClipCount(5)" class="clip-count-btn px-3 py-1 text-xs font-semibold rounded-md transition text-slate-400" data-val="5">5</button>
+                <button type="button" onclick="setClipCount(10)" class="clip-count-btn px-3 py-1 text-xs font-semibold rounded-md transition text-slate-400" data-val="10">10</button>
               </div>
             </div>
             
@@ -1161,6 +1172,105 @@
     </div>
   </div>
 
+  <!-- HYPERFRAMES UNIVERSAL STUDIO MODAL -->
+  <div id="modal-hyperframes" class="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-yellow-500/30 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">⚡</span>
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              Hyperframes Universal Studio
+              <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/40">Next-Gen</span>
+            </h3>
+            <p class="text-xs text-slate-400">Word-synced animated subtitles, punch zooms & top status badge</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeHyperframesModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Clip Details -->
+      <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs text-slate-300 flex justify-between items-center">
+        <span class="font-mono text-slate-400" id="hf-clip-filename">clip.mp4</span>
+        <span class="text-emerald-400 font-semibold" id="hf-clip-duration">--s</span>
+      </div>
+
+      <!-- Controls -->
+      <div class="space-y-3">
+        <!-- Style Preset -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Subtitle Typography & Color Palette</label>
+          <select id="hf-style-select" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-yellow-500">
+            <option value="viral_pop">🔥 Viral Pop (Hormozi / Bold Active Yellow)</option>
+            <option value="mrbeast_hyper">🏆 MrBeast Hyper (High Stakes / Lime & Gold)</option>
+            <option value="desi_comedy">😂 Desi Comedy (Bollywood / Saffron & Pink)</option>
+            <option value="survival_arctic">❄️ Survival Adventure (Ice Cyan & Fire Red)</option>
+            <option value="clean_minimal">🎙️ Clean Minimal (Modern Sans / White Glow)</option>
+          </select>
+        </div>
+
+        <!-- Punch Zoom Intensity -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Camera Punch-Zoom Dynamics</label>
+          <select id="hf-zoom-select" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-yellow-500">
+            <option value="dynamic">⚡ Dynamic (1.15x on audio energy peaks - Recommended)</option>
+            <option value="aggressive">💥 Aggressive (1.22x snap zooms)</option>
+            <option value="subtle">🌊 Subtle (1.08x gentle push-in)</option>
+            <option value="none">🚫 Off (Static camera framing)</option>
+          </select>
+        </div>
+
+        <!-- Top Badge Text -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Top Hook / Status Badge (Optional)</label>
+          <input type="text" id="hf-badge-input" placeholder="e.g. ❄️ ARCTIC CIRCLE · ALASKA or ⚡ SPEED LIVE STREAM" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-yellow-500">
+        </div>
+      </div>
+
+      <!-- Contact Sheet Preview Area -->
+      <div id="hf-preview-area" class="hidden space-y-2 border-t border-slate-800 pt-3">
+        <div class="flex items-center justify-between text-xs text-slate-400">
+          <span>Contact Sheet Preview (6 Key Frames):</span>
+          <span class="text-emerald-400 font-mono text-[11px]" id="hf-preview-stats"></span>
+        </div>
+        <div class="rounded-xl overflow-hidden border border-slate-800 bg-black max-h-64 flex items-center justify-center">
+          <img id="hf-preview-img" src="" alt="Contact Sheet" class="w-full h-auto object-contain cursor-pointer" onclick="window.open(this.src, '_blank')">
+        </div>
+        <p class="text-[10px] text-slate-500 text-center">Click image to open full resolution contact sheet in a new tab</p>
+      </div>
+
+      <!-- Progress / Status Area -->
+      <div id="hf-status-area" class="hidden p-3 rounded-xl text-xs space-y-1"></div>
+
+      <!-- Deliverables Area -->
+      <div id="hf-deliverables-area" class="hidden p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/80 text-emerald-200 text-xs space-y-2">
+        <div class="font-bold flex items-center gap-1.5 text-emerald-300">
+          <i data-lucide="check-circle-2" class="w-4 h-4"></i> Renders Completed Successfully!
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <a id="hf-download-master" href="#" download class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition">
+            🎬 Download Master (<span id="hf-master-size">--</span>)
+          </a>
+          <a id="hf-download-preview" href="#" download class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 transition">
+            📱 Mobile Preview (<span id="hf-preview-size">--</span>)
+          </a>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex gap-2 pt-2 border-t border-slate-800">
+        <button type="button" id="hf-btn-preview" onclick="generateHyperframesPreview()" class="flex-1 py-2 px-3 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center justify-center gap-1.5">
+          <i data-lucide="eye" class="w-3.5 h-3.5 text-yellow-400"></i> Preview Contact Sheet
+        </button>
+        <button type="button" id="hf-btn-render" onclick="executeHyperframesRender()" class="flex-1 py-2 px-3 text-xs font-bold rounded-lg bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black shadow-lg shadow-yellow-500/20 transition flex items-center justify-center gap-1.5 font-black">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Render Master Video
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Upload to Socials Modal -->
   <div id="modal-upload" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1731,6 +1841,25 @@
       });
     }
 
+    async function browseLocalFile() {
+      try {
+        showToast('Opening Windows file browser...');
+        const res = await fetch('/api/browse-local-file', { method: 'POST' });
+        const data = await res.json();
+        if (data.success && data.file_path) {
+          const input = document.getElementById('urlInput');
+          if (input) {
+            input.value = data.file_path;
+            const filename = data.file_path.split(/[\\/]/).pop();
+            showToast(`Selected offline video: ${filename}`);
+            fetchRangeSuggestions(data.file_path);
+          }
+        }
+      } catch (err) {
+        console.error('File browse error:', err);
+      }
+    }
+
     function clearTimeRange() {
       const s = document.getElementById('timeRangeStart');
       const e = document.getElementById('timeRangeEnd');
@@ -1743,7 +1872,8 @@
     async function fetchRangeSuggestions(url) {
       if (!url) return;
       const clean = url.trim();
-      if (!clean.includes('youtube.com') && !clean.includes('youtu.be') && clean.length !== 11) {
+      const isLocal = clean.includes('\\') || clean.includes('/') || /\.(mp4|mkv|mov|webm|avi|flv|ts|m4v)$/i.test(clean);
+      if (!clean.includes('youtube.com') && !clean.includes('youtu.be') && clean.length !== 11 && !isLocal) {
         return;
       }
       const container = document.getElementById('suggestedRangesContainer');
@@ -2088,6 +2218,13 @@
 
                 <div class="space-y-2 pt-2 border-t border-slate-800/80">
                   <button
+                    onclick="openHyperframesModalByIndex(${i})"
+                    class="w-full flex items-center justify-center gap-2 py-2 px-3 text-xs font-black rounded-lg bg-gradient-to-r from-amber-500 via-yellow-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-black shadow-md shadow-yellow-500/20 transition cursor-pointer tracking-wide"
+                  >
+                    <i data-lucide="zap" class="w-3.5 h-3.5"></i> ⚡ Enhance with Hyperframes
+                  </button>
+
+                  <button
                     onclick="openUploadModalByIndex(${i})"
                     class="w-full flex items-center justify-center gap-2 py-2 px-3 text-xs font-bold rounded-lg bg-gradient-to-r from-red-600 via-pink-600 to-indigo-600 hover:from-red-500 hover:to-indigo-500 text-white shadow-md shadow-indigo-600/20 transition cursor-pointer"
                   >
@@ -2125,6 +2262,181 @@
         if (window.lucide) lucide.createIcons();
       } catch (err) {
         console.error(err);
+      }
+    }
+
+    // --- HYPERFRAMES UNIVERSAL STUDIO CONTROLLERS ---
+    let currentHfClip = null;
+
+    function openHyperframesModalByIndex(index) {
+      if (!window.currentClipsList || !window.currentClipsList[index]) {
+        showToast('⚠️ Clips still initializing. Please wait a second.');
+        return;
+      }
+      const clip = window.currentClipsList[index];
+      currentHfClip = clip;
+      showToast(`⚡ Opening Hyperframes Studio: ${clip.filename}`);
+
+      const filenameEl = document.getElementById('hf-clip-filename');
+      const durEl = document.getElementById('hf-clip-duration');
+      if (filenameEl) filenameEl.innerText = clip.filename || 'clip.mp4';
+      if (durEl) durEl.innerText = clip.duration ? (clip.duration.toFixed(1) + 's') : '';
+
+      const badgeInput = document.getElementById('hf-badge-input');
+      const rawTitle = clip.short_title || clip.suggested_title || '';
+      if (badgeInput) {
+        if (rawTitle) {
+          badgeInput.value = '⚡ ' + rawTitle.replace(/[#?]/g, '').trim().toUpperCase();
+        } else {
+          badgeInput.value = '';
+        }
+      }
+
+      document.getElementById('hf-preview-area').classList.add('hidden');
+      document.getElementById('hf-status-area').classList.add('hidden');
+      document.getElementById('hf-deliverables-area').classList.add('hidden');
+      document.getElementById('hf-btn-preview').disabled = false;
+      document.getElementById('hf-btn-render').disabled = false;
+
+      document.getElementById('modal-hyperframes').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function closeHyperframesModal() {
+      document.getElementById('modal-hyperframes').classList.add('hidden');
+    }
+
+    async function generateHyperframesPreview() {
+      if (!currentHfClip) return;
+      showToast('📸 Generating 6-frame contact sheet preview...');
+      const btn = document.getElementById('hf-btn-preview');
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Generating Preview...';
+      if (window.lucide) lucide.createIcons();
+
+      const style = document.getElementById('hf-style-select').value;
+      const zoom = document.getElementById('hf-zoom-select').value;
+      const badge = document.getElementById('hf-badge-input').value;
+
+      try {
+        const res = await fetch('/api/hyperframes/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: currentHfClip.filename,
+            style: style,
+            zoom: zoom,
+            badge: badge
+          })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          alert('Error generating preview: ' + (data.error || 'Unknown error'));
+          return;
+        }
+
+        const previewArea = document.getElementById('hf-preview-area');
+        const previewImg = document.getElementById('hf-preview-img');
+        const previewStats = document.getElementById('hf-preview-stats');
+
+        previewImg.src = data.preview_url + '?t=' + Date.now();
+        previewStats.innerText = `${data.word_count} words · ${data.zoom_count} punch zooms`;
+        previewArea.classList.remove('hidden');
+      } catch (err) {
+        alert('Failed to generate preview: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="eye" class="w-3.5 h-3.5 text-yellow-400"></i> Preview Contact Sheet';
+        if (window.lucide) lucide.createIcons();
+      }
+    }
+
+    async function executeHyperframesRender() {
+      if (!currentHfClip) return;
+      showToast('🚀 Rendering Master Video with Hyperframes...');
+      const btn = document.getElementById('hf-btn-render');
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Launching Render...';
+      if (window.lucide) lucide.createIcons();
+
+      const style = document.getElementById('hf-style-select').value;
+      const zoom = document.getElementById('hf-zoom-select').value;
+      const badge = document.getElementById('hf-badge-input').value;
+
+      const statusArea = document.getElementById('hf-status-area');
+      statusArea.classList.remove('hidden');
+      statusArea.className = 'p-3 rounded-xl text-xs bg-indigo-950/60 border border-indigo-800/80 text-indigo-200 flex items-center gap-2';
+      statusArea.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin text-indigo-400"></i> Rendering master video with Hyperframes...';
+      if (window.lucide) lucide.createIcons();
+
+      try {
+        const res = await fetch('/api/hyperframes/render', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: currentHfClip.filename,
+            style: style,
+            zoom: zoom,
+            badge: badge
+          })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          statusArea.className = 'p-3 rounded-xl text-xs bg-red-950/60 border border-red-800 text-red-200';
+          statusArea.innerText = 'Render failed: ' + (data.error || 'Unknown error');
+          btn.disabled = false;
+          btn.innerHTML = '<i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Render Master Video';
+          return;
+        }
+
+        const jobId = data.job_id;
+        const pollInterval = setInterval(async () => {
+          try {
+            const sRes = await fetch(`/api/hyperframes/status/${jobId}`);
+            const sData = await sRes.json();
+            if (!sData.success) return;
+            const job = sData.job;
+
+            if (job.status === 'completed') {
+              clearInterval(pollInterval);
+              statusArea.classList.add('hidden');
+              
+              const delArea = document.getElementById('hf-deliverables-area');
+              delArea.classList.remove('hidden');
+
+              const masterBtn = document.getElementById('hf-download-master');
+              masterBtn.href = job.result.master_url;
+              masterBtn.download = job.result.master_filename;
+              document.getElementById('hf-master-size').innerText = (job.result.master_size / (1024*1024)).toFixed(1) + ' MB';
+
+              const prevBtn = document.getElementById('hf-download-preview');
+              prevBtn.href = job.result.preview_url;
+              prevBtn.download = job.result.preview_filename;
+              document.getElementById('hf-preview-size').innerText = (job.result.preview_size / (1024*1024)).toFixed(2) + ' MB';
+
+              btn.disabled = false;
+              btn.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5"></i> Render Complete';
+              if (window.lucide) lucide.createIcons();
+            } else if (job.status === 'failed') {
+              clearInterval(pollInterval);
+              statusArea.className = 'p-3 rounded-xl text-xs bg-red-950/60 border border-red-800 text-red-200';
+              statusArea.innerText = 'Render failed: ' + (job.error || 'Unknown error');
+              btn.disabled = false;
+              btn.innerHTML = '<i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Render Master Video';
+            } else {
+              statusArea.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin text-yellow-400"></i> ${escapeHtml(job.step || 'Processing...')} (${job.progress}%)`;
+              if (window.lucide) lucide.createIcons();
+            }
+          } catch (pollErr) {
+            console.error(pollErr);
+          }
+        }, 2500);
+
+      } catch (err) {
+        statusArea.className = 'p-3 rounded-xl text-xs bg-red-950/60 border border-red-800 text-red-200';
+        statusArea.innerText = 'Render error: ' + err.message;
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Render Master Video';
       }
     }
 

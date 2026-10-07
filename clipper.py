@@ -11,10 +11,12 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+import hashlib
 from typing import Optional, Any
 from youtube_transcript_api import YouTubeTranscriptApi
 from config import (
     OUTPUT_DIR,
+    TEMP_DIR,
     get_jev_api_key,
     MIN_CLIP_DURATION,
     MAX_CLIP_DURATION,
@@ -28,12 +30,68 @@ from title_tag_engine import generate_smart_title_and_hashtags, build_video_cont
 from publish_log import build_publication_record, log_publication, default_log_path
 from uploader import upload_clip_to_platforms, load_upload_config
 
+def is_local_video(path_str: Any) -> bool:
+    """Returns True if path_str points to an existing file on the local filesystem."""
+    if not path_str or not isinstance(path_str, (str, Path)):
+        return False
+    try:
+        p = Path(str(path_str).strip('"').strip("'"))
+        return p.is_file()
+    except Exception:
+        return False
+
 def extract_video_id(url_or_id: str) -> str:
-    """Extracts YouTube 11-character video ID from various URL formats using robust parser."""
+    """Extracts YouTube 11-character video ID or generates a deterministic 11-char ID for local files."""
+    if is_local_video(url_or_id):
+        p = Path(str(url_or_id).strip('"').strip("'")).resolve()
+        digest = hashlib.md5(str(p).encode("utf-8")).hexdigest()[:7]
+        return f"loc_{digest}"
     vid = _extract_id(url_or_id)
     if vid and len(vid) == 11 and re.match(r"^[0-9A-Za-z_-]{11}$", vid):
         return vid
     raise ValueError(f"Could not extract a valid YouTube video ID from '{url_or_id}'")
+
+def get_local_transcript(media_path: Path, video_id: Optional[str] = None) -> list:
+    """Transcribes an offline local video file using faster-whisper, with caching."""
+    media_path = Path(media_path).resolve()
+    cache_id = video_id or f"loc_{hashlib.md5(str(media_path).encode('utf-8')).hexdigest()[:7]}"
+    cache_file = TEMP_DIR / f"{cache_id}_transcript.json"
+    if cache_file.exists():
+        try:
+            cached = json.loads(cache_file.read_text(encoding="utf-8"))
+            if isinstance(cached, list) and cached:
+                return cached
+        except Exception:
+            pass
+
+    from subtitles import get_whisper_model
+    model = get_whisper_model("base.en")
+    print(f"      Transcribing local video with faster-whisper ({media_path.name})...")
+    segments, _ = model.transcribe(
+        str(media_path),
+        vad_filter=True,
+        vad_parameters=dict(min_silence_duration_ms=250)
+    )
+    snippets = []
+    for s in segments:
+        text = (s.text or "").strip()
+        if text:
+            snippets.append({
+                "text": text,
+                "start": round(float(s.start), 2),
+                "duration": round(float(max(0.1, s.end - s.start)), 2)
+            })
+
+    if not snippets:
+        raise RuntimeError(f"No spoken words detected in local video '{media_path.name}'.")
+
+    try:
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        cache_file.write_text(json.dumps(snippets, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+    return snippets
 
 def get_transcript(video_id: str):
     """Fetches English or auto-generated transcript with yt-dlp fallback."""
@@ -73,14 +131,21 @@ def process_video(
     print(f"  Sponsor Killer: {'ON' if enable_sponsor_killer else 'OFF'} | Auto-Bleeper: {'ON' if enable_auto_bleep else 'OFF'}")
     print("=" * 60)
 
+    is_local = is_local_video(youtube_url)
     video_id = extract_video_id(youtube_url)
-    clean_url = f"https://www.youtube.com/watch?v={video_id}"
-    print(f"\n[1/5] Processing Video ID: {video_id}")
-    print(f"      URL: {clean_url}")
+    clean_url = str(Path(str(youtube_url).strip('"').strip("'")).resolve()) if is_local else f"https://www.youtube.com/watch?v={video_id}"
 
-    # Fetch transcript
-    print("\n[2/5] Fetching transcript captions...")
-    transcript = get_transcript(video_id)
+    if is_local:
+        print(f"\n[1/5] Processing Local Video: {Path(clean_url).name} (ID: {video_id})")
+        print(f"      Path: {clean_url}")
+        print("\n[2/5] Transcribing local audio with faster-whisper...")
+        transcript = get_local_transcript(Path(clean_url), video_id=video_id)
+    else:
+        print(f"\n[1/5] Processing Video ID: {video_id}")
+        print(f"      URL: {clean_url}")
+        print("\n[2/5] Fetching transcript captions...")
+        transcript = get_transcript(video_id)
+
     if not transcript:
         print(f"      [Error] No transcript captions available for video '{video_id}'.")
         return
@@ -107,9 +172,10 @@ def process_video(
         range_start=r_start,
         range_end=r_end
     )
-    if candidates and candidates > 0 and len(candidate_windows) > candidates:
-        stride = len(candidate_windows) / candidates
-        candidate_windows = [candidate_windows[int(i * stride)] for i in range(candidates)]
+    effective_candidates = max(candidates or 15, top_k * 4)
+    if effective_candidates > 0 and len(candidate_windows) > effective_candidates:
+        stride = len(candidate_windows) / effective_candidates
+        candidate_windows = [candidate_windows[int(i * stride)] for i in range(effective_candidates)]
     print(f"      Generated {len(candidate_windows)} candidate windows.")
 
     api_key = get_jev_api_key()
