@@ -8,7 +8,71 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple, Any
 
 from config import BASE_DIR, OUTPUT_DIR as CLI_OUTPUT_DIR
-WORKSPACE_DIR = BASE_DIR.parent / "my-video"
+from video_cutter import get_ffmpeg_path
+
+WORKSPACE_DIR = BASE_DIR / "hyperframes_studio"
+
+def ensure_workspace(workspace_dir: Path = WORKSPACE_DIR) -> Path:
+    """
+    Ensures that the HyperFrames composition workspace exists and contains
+    all necessary configuration and vendor assets.
+    """
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    vendor_dir = workspace_dir / "vendor"
+    vendor_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. hyperframes.json
+    hf_json_path = workspace_dir / "hyperframes.json"
+    if not hf_json_path.exists():
+        hf_config = {
+            "$schema": "https://hyperframes.heygen.com/schema/hyperframes.json",
+            "registry": "https://raw.githubusercontent.com/heygen-com/hyperframes/main/registry",
+            "paths": {
+                "blocks": "compositions",
+                "components": "compositions/components",
+                "assets": "assets"
+            },
+            "media": {
+                "autoProxy": True
+            }
+        }
+        hf_json_path.write_text(json.dumps(hf_config, indent=2), encoding="utf-8")
+
+    # 2. package.json
+    pkg_json_path = workspace_dir / "package.json"
+    if not pkg_json_path.exists():
+        pkg_config = {
+            "name": "hyperframes-studio",
+            "private": True,
+            "type": "module",
+            "dependencies": {
+                "gsap": "^3.12.5"
+            }
+        }
+        pkg_json_path.write_text(json.dumps(pkg_config, indent=2), encoding="utf-8")
+
+    # 3. meta.json
+    meta_json_path = workspace_dir / "meta.json"
+    if not meta_json_path.exists():
+        meta_config = {
+            "id": "hyperframes-studio",
+            "name": "hyperframes-studio"
+        }
+        meta_json_path.write_text(json.dumps(meta_config, indent=2), encoding="utf-8")
+
+    # 4. vendor/gsap.min.js
+    dest_gsap = vendor_dir / "gsap.min.js"
+    if not dest_gsap.exists():
+        source_gsap = BASE_DIR / "assets" / "vendor" / "gsap.min.js"
+        if source_gsap.exists():
+            shutil.copy2(source_gsap, dest_gsap)
+        else:
+            for candidate in BASE_DIR.glob("**/gsap.min.js"):
+                if candidate.is_file():
+                    shutil.copy2(candidate, dest_gsap)
+                    break
+
+    return workspace_dir
 
 # Style presets
 STYLES = {
@@ -433,6 +497,7 @@ def prepare_clean_base_video(input_video_path: Path, target_base: Path) -> str:
     2. Otherwise, automatically runs FFmpeg delogo inpainting over the lower-third
        subtitle band (x:100..980, y:1280..1640) at 6x real-time speed.
     """
+    target_base.parent.mkdir(parents=True, exist_ok=True)
     clean_candidate = input_video_path.with_name(f"{input_video_path.stem}_clean.mp4")
     if clean_candidate.exists() and get_video_duration(clean_candidate) > 0:
         print(f"  [Hyperframes] Clean video twin found: {clean_candidate.name}. Using as base.")
@@ -440,8 +505,13 @@ def prepare_clean_base_video(input_video_path: Path, target_base: Path) -> str:
         return "clean_twin"
 
     print(f"  [Hyperframes] Old subtitles detected on {input_video_path.name}. Scrubbing burned text...")
+    try:
+        ffmpeg_exe = get_ffmpeg_path()
+    except Exception:
+        ffmpeg_exe = "ffmpeg"
+
     cmd = [
-        "ffmpeg", "-y",
+        ffmpeg_exe, "-y",
         "-i", str(input_video_path),
         "-vf", "delogo=x=40:y=1240:w=1000:h=480:show=0",
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18",
@@ -467,6 +537,8 @@ def setup_and_render_preview(
     """Generates contact sheet preview for user approval."""
     if not input_video_path.exists():
         raise FileNotFoundError(f"Input video not found: {input_video_path}")
+
+    ensure_workspace()
 
     # Prepare base video without old burned subtitles
     target_base = WORKSPACE_DIR / "base_vertical.mp4"
@@ -529,6 +601,8 @@ def render_final_deliverables(
     output_dir: Path = CLI_OUTPUT_DIR
 ) -> Dict[str, Any]:
     """Renders 1080x1920 master and encodes < 3 MB preview MP4."""
+    ensure_workspace()
+
     master_file = output_dir / f"{output_prefix}_hyperframes_master.mp4"
     preview_file = output_dir / f"{output_prefix}_hyperframes_preview.mp4"
 
@@ -541,8 +615,13 @@ def render_final_deliverables(
     maxrate = "350k" if dur > 40 else "420k"
     bufsize = "700k" if dur > 40 else "840k"
     
+    try:
+        ffmpeg_exe = get_ffmpeg_path()
+    except Exception:
+        ffmpeg_exe = "ffmpeg"
+
     enc_cmd = [
-        "ffmpeg", "-y", "-i", str(master_file),
+        ffmpeg_exe, "-y", "-i", str(master_file),
         "-c:v", "libx264", "-crf", "32", "-preset", "slow",
         "-maxrate", maxrate, "-bufsize", bufsize,
         "-c:a", "aac", "-b:a", "48k",

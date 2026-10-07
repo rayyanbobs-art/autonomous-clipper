@@ -74,3 +74,7 @@ venv.bak/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# HyperFrames Studio Workspace
+hyperframes_studio/
+
