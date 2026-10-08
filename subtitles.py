@@ -404,7 +404,269 @@ SUBTITLE_STYLES = {
         "pop_scale": False,
         "uppercase": True,
     },
+    "iman_gadzhi": {
+        "name": "Iman Gadzhi Luxury",
+        "label": "👑 Iman Gadzhi (Couture Gold)",
+        "preview_bg": "from-amber-700/25 to-stone-900/40",
+        "badge_color": "text-amber-300 border-amber-500/40",
+        "font": "Georgia",
+        "size": 54,
+        "primary_color": "&H00E8F0F8",
+        "secondary_color": "&H00E8F0F8",
+        "outline_color": "&H00000000",
+        "outline": 3,
+        "shadow": 2,
+        "border_style": 1,
+        "back_color": "&H90000000",
+        "margin_v": 420,
+        "highlight_color": "&H002BD0FF",
+        "pop_scale": True,
+        "uppercase": True,
+        "max_words_per_line": 2,
+        "max_duration_sec": 1.2,
+    },
+    "joe_rogan": {
+        "name": "Joe Rogan Podcast",
+        "label": "🎙️ Joe Rogan (Podcast Dark)",
+        "preview_bg": "from-red-900/30 to-zinc-950/50",
+        "badge_color": "text-red-400 border-red-600/40",
+        "font": "Arial",
+        "size": 52,
+        "primary_color": "&H00FFFFFF",
+        "secondary_color": "&H00FFFFFF",
+        "outline_color": "&H00000000",
+        "outline": 2,
+        "shadow": 0,
+        "border_style": 3,
+        "back_color": "&HA0080808",
+        "margin_v": 380,
+        "highlight_color": "&H002020FF",
+        "pop_scale": True,
+        "uppercase": True,
+        "max_words_per_line": 3,
+    },
+    "ali_abdaal": {
+        "name": "Ali Abdaal Clean",
+        "label": "📚 Ali Abdaal (Notion Minimal)",
+        "preview_bg": "from-sky-600/20 to-slate-900/40",
+        "badge_color": "text-sky-300 border-sky-500/30",
+        "font": "Arial",
+        "size": 48,
+        "primary_color": "&H00FFFFFF",
+        "secondary_color": "&H00FFFFFF",
+        "outline_color": "&H00000000",
+        "outline": 3,
+        "shadow": 1,
+        "border_style": 1,
+        "back_color": "&H80000000",
+        "margin_v": 360,
+        "highlight_color": "&H00FFE066",
+        "pop_scale": False,
+        "uppercase": False,
+        "max_words_per_line": 4,
+    },
+    "vox_explainer": {
+        "name": "Vox Journalism",
+        "label": "📰 Vox Explainer (Editorial Yellow)",
+        "preview_bg": "from-yellow-600/25 to-zinc-900/40",
+        "badge_color": "text-yellow-300 border-yellow-500/40",
+        "font": "Arial",
+        "size": 52,
+        "primary_color": "&H00FFFFFF",
+        "secondary_color": "&H00FFFFFF",
+        "outline_color": "&H00000000",
+        "outline": 6,
+        "shadow": 0,
+        "border_style": 1,
+        "back_color": "&H00000000",
+        "margin_v": 400,
+        "highlight_color": "&H0000D4FF",
+        "pop_scale": True,
+        "uppercase": True,
+        "max_words_per_line": 3,
+    },
+    "andrew_huberman": {
+        "name": "Huberman Lab",
+        "label": "🧠 Huberman (Neuroscience Teal)",
+        "preview_bg": "from-teal-600/20 to-slate-950/40",
+        "badge_color": "text-teal-300 border-teal-500/30",
+        "font": "Arial",
+        "size": 48,
+        "primary_color": "&H00E6F0F2",
+        "secondary_color": "&H00E6F0F2",
+        "outline_color": "&H00000000",
+        "outline": 3,
+        "shadow": 1,
+        "border_style": 1,
+        "back_color": "&H80000000",
+        "margin_v": 360,
+        "highlight_color": "&H00D4B200",
+        "pop_scale": False,
+        "uppercase": False,
+        "max_words_per_line": 5,
+    },
+    "david_goggins": {
+        "name": "David Goggins Savage",
+        "label": "🔥 Goggins Savage (Uncut Hardcore)",
+        "preview_bg": "from-orange-600/30 to-red-950/50",
+        "badge_color": "text-orange-400 border-orange-500/40",
+        "font": "Impact",
+        "size": 66,
+        "primary_color": "&H00FFFFFF",
+        "secondary_color": "&H00FFFFFF",
+        "outline_color": "&H00000000",
+        "outline": 8,
+        "shadow": 4,
+        "border_style": 1,
+        "back_color": "&H90000000",
+        "margin_v": 440,
+        "highlight_color": "&H000066FF",
+        "pop_scale": True,
+        "uppercase": True,
+        "max_words_per_line": 2,
+        "max_duration_sec": 1.0,
+    },
+    "luke_belmar": {
+        "name": "Belmar Matrix Glitch",
+        "label": "⚡ Luke Belmar (Data Matrix)",
+        "preview_bg": "from-emerald-700/25 to-black/60",
+        "badge_color": "text-lime-400 border-lime-500/40",
+        "font": "Impact",
+        "size": 58,
+        "primary_color": "&H00FFFFFF",
+        "secondary_color": "&H00FFFFFF",
+        "outline_color": "&H00000000",
+        "outline": 6,
+        "shadow": 2,
+        "border_style": 1,
+        "back_color": "&HA0000000",
+        "margin_v": 420,
+        "highlight_color": "&H0000FF66",
+        "pop_scale": True,
+        "uppercase": True,
+        "max_words_per_line": 2,
+    },
+    "diary_of_a_ceo": {
+        "name": "Diary of a CEO",
+        "label": "💼 Diary of a CEO (Bartlett Clean)",
+        "preview_bg": "from-stone-700/20 to-neutral-950/50",
+        "badge_color": "text-amber-200 border-stone-600/30",
+        "font": "Arial",
+        "size": 50,
+        "primary_color": "&H00F5F5F5",
+        "secondary_color": "&H00F5F5F5",
+        "outline_color": "&H00000000",
+        "outline": 3,
+        "shadow": 1,
+        "border_style": 1,
+        "back_color": "&H80000000",
+        "margin_v": 380,
+        "highlight_color": "&H0099D6FF",
+        "pop_scale": True,
+        "uppercase": False,
+        "max_words_per_line": 4,
+    },
+    "fintech_pro": {
+        "name": "Fintech Ticker",
+        "label": "📈 Fintech Pro (Wall Street Green)",
+        "preview_bg": "from-emerald-600/20 to-zinc-950/50",
+        "badge_color": "text-emerald-400 border-emerald-500/40",
+        "font": "Arial",
+        "size": 52,
+        "primary_color": "&H00FFFFFF",
+        "secondary_color": "&H00FFFFFF",
+        "outline_color": "&H00000000",
+        "outline": 2,
+        "shadow": 0,
+        "border_style": 3,
+        "back_color": "&HA00D1F17",
+        "margin_v": 390,
+        "highlight_color": "&H0044FF77",
+        "pop_scale": True,
+        "uppercase": True,
+        "max_words_per_line": 3,
+    },
+    "anime_shonen": {
+        "name": "Shonen Action",
+        "label": "⚔️ Anime Shonen (Power Burst)",
+        "preview_bg": "from-violet-600/25 to-pink-950/50",
+        "badge_color": "text-pink-400 border-pink-500/40",
+        "font": "Impact",
+        "size": 64,
+        "primary_color": "&H00FFFFFF",
+        "secondary_color": "&H00FFFFFF",
+        "outline_color": "&H00000000",
+        "outline": 7,
+        "shadow": 3,
+        "border_style": 1,
+        "back_color": "&H90000000",
+        "margin_v": 450,
+        "highlight_color": "&H0000BFFF",
+        "pop_scale": True,
+        "uppercase": True,
+        "italic": True,
+        "max_words_per_line": 2,
+    },
+    "retro_vhs": {
+        "name": "Retro VHS Synthwave",
+        "label": "📼 Retro VHS (Synthwave 80s)",
+        "preview_bg": "from-fuchsia-600/25 to-cyan-950/50",
+        "badge_color": "text-fuchsia-300 border-fuchsia-500/40",
+        "font": "Impact",
+        "size": 58,
+        "primary_color": "&H00FFFF00",
+        "secondary_color": "&H00FFFF00",
+        "outline_color": "&H00330033",
+        "outline": 5,
+        "shadow": 3,
+        "border_style": 1,
+        "back_color": "&H90000000",
+        "margin_v": 420,
+        "highlight_color": "&H00FF00FF",
+        "pop_scale": True,
+        "uppercase": True,
+        "max_words_per_line": 3,
+    },
+    "streetwear_hype": {
+        "name": "Streetwear Hype",
+        "label": "👟 Streetwear Hype (Brutalist)",
+        "preview_bg": "from-zinc-700/30 to-black/70",
+        "badge_color": "text-yellow-300 border-zinc-600/40",
+        "font": "Impact",
+        "size": 62,
+        "primary_color": "&H00FFFFFF",
+        "secondary_color": "&H00FFFFFF",
+        "outline_color": "&H00000000",
+        "outline": 8,
+        "shadow": 0,
+        "border_style": 1,
+        "back_color": "&H00000000",
+        "margin_v": 430,
+        "highlight_color": "&H0000CCFF",
+        "pop_scale": True,
+        "uppercase": True,
+        "max_words_per_line": 2,
+    },
 }
+
+def hex_to_ass_color(hex_str: Optional[str], default_ass: str = "&H00FFFFFF") -> str:
+    """Converts #RRGGBB or #AARRGGBB hex color to ASS &HAABBGGRR color format."""
+    if not hex_str:
+        return default_ass
+    s = str(hex_str).strip()
+    if s.startswith("&H"):
+        return s
+    s = s.lstrip("#")
+    if len(s) == 6:
+        r, g, b = s[0:2], s[2:4], s[4:6]
+        return f"&H00{b.upper()}{g.upper()}{r.upper()}"
+    elif len(s) == 8:
+        a, r, g, b = s[0:2], s[2:4], s[4:6], s[6:8]
+        return f"&H{a.upper()}{b.upper()}{g.upper()}{r.upper()}"
+    elif len(s) == 3:
+        r, g, b = s[0]*2, s[1]*2, s[2]*2
+        return f"&H00{b.upper()}{g.upper()}{r.upper()}"
+    return default_ass
 
 def get_whisper_model(model_name: str = "base.en") -> WhisperModel:
     global _WHISPER_MODEL
@@ -460,7 +722,8 @@ def generate_synced_subtitles(
     max_duration_sec: float = 1.5,
     enable_emojis: bool = False,
     enable_auto_bleep: bool = False,
-    words_out: Optional[List[Dict]] = None
+    words_out: Optional[List[Dict]] = None,
+    custom_style: Optional[Dict] = None
 ) -> bool:
     """
     Transcribes audio track using faster-whisper with word-level timestamps and VAD filtering,
@@ -505,7 +768,8 @@ def generate_synced_subtitles(
             enable_auto_bleep=enable_auto_bleep,
             max_words_per_line=max_words_per_line,
             max_pause_sec=max_pause_sec,
-            max_duration_sec=max_duration_sec
+            max_duration_sec=max_duration_sec,
+            custom_style=custom_style
         )
         ass_file.write_text(ass_content, encoding="utf-8")
         return True
@@ -522,7 +786,8 @@ def build_ass_from_words(
     enable_auto_bleep: bool = False,
     max_words_per_line: int = 3,
     max_pause_sec: float = 0.32,
-    max_duration_sec: float = 1.5
+    max_duration_sec: float = 1.5,
+    custom_style: Optional[Dict] = None
 ) -> str:
     """
     Constructs a complete ASS subtitle script string from word timestamps,
@@ -538,7 +803,68 @@ def build_ass_from_words(
     # for profanity-bleep windows and B-roll cue scheduling.
     words = [dict(w) for w in words]
 
-    style = SUBTITLE_STYLES.get(style_key, SUBTITLE_STYLES["bold_pop"])
+    style = dict(SUBTITLE_STYLES.get(style_key, SUBTITLE_STYLES["bold_pop"]))
+    if custom_style and isinstance(custom_style, dict):
+        if custom_style.get("font"):
+            style["font"] = str(custom_style["font"])
+        if custom_style.get("size"):
+            try:
+                style["size"] = int(custom_style["size"])
+            except (ValueError, TypeError):
+                pass
+        if "primary_color" in custom_style and custom_style["primary_color"]:
+            style["primary_color"] = hex_to_ass_color(custom_style["primary_color"], style.get("primary_color", "&H00FFFFFF"))
+        if "highlight_color" in custom_style and custom_style["highlight_color"]:
+            style["highlight_color"] = hex_to_ass_color(custom_style["highlight_color"], style.get("highlight_color") or "&H0000FFFF")
+        if "secondary_color" in custom_style and custom_style["secondary_color"]:
+            style["secondary_color"] = hex_to_ass_color(custom_style["secondary_color"], style.get("secondary_color") or style.get("primary_color", "&H00FFFFFF"))
+        if "outline_color" in custom_style and custom_style["outline_color"]:
+            style["outline_color"] = hex_to_ass_color(custom_style["outline_color"], style.get("outline_color", "&H00000000"))
+        if "outline" in custom_style and custom_style["outline"] is not None:
+            try:
+                style["outline"] = float(custom_style["outline"])
+            except (ValueError, TypeError):
+                pass
+        if "shadow" in custom_style and custom_style["shadow"] is not None:
+            try:
+                style["shadow"] = float(custom_style["shadow"])
+            except (ValueError, TypeError):
+                pass
+        if "margin_v" in custom_style and custom_style["margin_v"] is not None:
+            try:
+                style["margin_v"] = int(custom_style["margin_v"])
+            except (ValueError, TypeError):
+                pass
+        if "alignment" in custom_style and custom_style["alignment"] is not None:
+            try:
+                style["alignment"] = int(custom_style["alignment"])
+            except (ValueError, TypeError):
+                pass
+        if "border_style" in custom_style and custom_style["border_style"] is not None:
+            try:
+                style["border_style"] = int(custom_style["border_style"])
+            except (ValueError, TypeError):
+                pass
+        if "back_color" in custom_style and custom_style["back_color"]:
+            style["back_color"] = hex_to_ass_color(custom_style["back_color"], style.get("back_color", "&H80000000"))
+        if "uppercase" in custom_style:
+            style["uppercase"] = bool(custom_style["uppercase"])
+        if "pop_scale" in custom_style:
+            style["pop_scale"] = bool(custom_style["pop_scale"])
+        if "karaoke_mode" in custom_style:
+            style["karaoke_mode"] = bool(custom_style["karaoke_mode"])
+        if "fade" in custom_style:
+            style["fade"] = bool(custom_style["fade"])
+        if "bold" in custom_style:
+            style["bold"] = bool(custom_style["bold"])
+        if "italic" in custom_style:
+            style["italic"] = bool(custom_style["italic"])
+        if "max_words_per_line" in custom_style and custom_style["max_words_per_line"] is not None:
+            try:
+                style["max_words_per_line"] = int(custom_style["max_words_per_line"])
+            except (ValueError, TypeError):
+                pass
+
     effective_max_words = style.get("max_words_per_line", max_words_per_line)
     effective_max_dur = style.get("max_duration_sec", max_duration_sec)
     effective_max_pause = style.get("max_pause_sec", max_pause_sec)

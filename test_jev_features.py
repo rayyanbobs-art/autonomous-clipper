@@ -94,22 +94,40 @@ class TestJevFeatures(unittest.TestCase):
 
     def test_03_parallel_batch_evaluation(self):
         """Verify parallel batch scoring formats batches and parses results correctly."""
+        from unittest.mock import patch, MagicMock
         chunks = [
             "Every day you don't execute is a day your competitors get ahead of you.",
             "Use discount code PODCAST20 at checkout for twenty percent off your order."
         ]
-        results = score_chunks_batch_with_jev(chunks, batch_size=2)
-        self.assertEqual(len(results), 2)
-        for r in results:
-            self.assertTrue(r.get("success"))
-            self.assertIn("virality_score", r)
-            self.assertIn("standalone_prob", r)
-            self.assertIn("sponsor_prob", r)
-            self.assertIn("composite_score", r)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "data": {
+                "answers": {
+                    "c0_virality": {"score": 2.5, "confidence": 0.90},
+                    "c0_standalone": {"noul": 0.85},
+                    "c0_sponsor": {"noul": 0.05},
+                    "c0_category": {"choice": "high_value_insight"},
+                    "c1_virality": {"score": 0.8, "confidence": 0.95},
+                    "c1_standalone": {"noul": 0.90},
+                    "c1_sponsor": {"noul": 0.95},
+                    "c1_category": {"choice": "filler_banter"}
+                }
+            }
+        }
+        with patch("requests.post", return_value=mock_resp):
+            results = score_chunks_batch_with_jev(chunks, api_key="mock_key", batch_size=2)
+            self.assertEqual(len(results), 2)
+            for r in results:
+                self.assertTrue(r.get("success"))
+                self.assertIn("virality_score", r)
+                self.assertIn("standalone_prob", r)
+                self.assertIn("sponsor_prob", r)
+                self.assertIn("composite_score", r)
 
-        # Chunk 0 should have very low sponsor prob; Chunk 1 should have high sponsor prob
-        self.assertLess(results[0]["sponsor_prob"], 0.20)
-        self.assertGreater(results[1]["sponsor_prob"], 0.70)
+            # Chunk 0 should have very low sponsor prob; Chunk 1 should have high sponsor prob
+            self.assertLess(results[0]["sponsor_prob"], 0.20)
+            self.assertGreater(results[1]["sponsor_prob"], 0.70)
 
     def test_04_profanity_detection_and_masking(self):
         """Verify profanity detection and masking for subtitles."""

@@ -145,7 +145,8 @@ def run_clipping_job(
     enable_bg_music: bool = False,
     bg_music_volume: float = 0.12,
     time_range_start: Optional[Any] = None,
-    time_range_end: Optional[Any] = None
+    time_range_end: Optional[Any] = None,
+    custom_subtitle_style: Optional[Dict] = None
 ):
     try:
         job = JOBS[job_id]
@@ -268,7 +269,8 @@ def run_clipping_job(
                 enable_auto_bleep=enable_auto_bleep,
                 enable_slow_zoom=enable_slow_zoom,
                 enable_bg_music=enable_bg_music,
-                bg_music_volume=bg_music_volume
+                bg_music_volume=bg_music_volume,
+                custom_subtitle_style=custom_subtitle_style
             )
 
             with completed_lock:
@@ -544,6 +546,9 @@ def generate():
 
     time_range_start = data.get("time_range_start")
     time_range_end = data.get("time_range_end")
+    custom_subtitle_style = data.get("custom_subtitle_style")
+    if custom_subtitle_style and not isinstance(custom_subtitle_style, dict):
+        custom_subtitle_style = None
 
     if not url:
         return jsonify({"error": "Please provide a valid YouTube video URL or local video file path."}), 400
@@ -565,7 +570,11 @@ def generate():
     t = threading.Thread(
         target=run_clipping_job,
         args=(job_id, url, top_k, candidates, subtitle_style, threshold, max_attempts, enable_broll, enable_emojis, framing_mode, enable_snappy_cuts, enable_punch_zooms, enable_outro, enable_sponsor_killer, enable_auto_bleep, enable_slow_zoom, enable_bg_music, bg_music_volume),
-        kwargs={"time_range_start": time_range_start, "time_range_end": time_range_end},
+        kwargs={
+            "time_range_start": time_range_start,
+            "time_range_end": time_range_end,
+            "custom_subtitle_style": custom_subtitle_style
+        },
         daemon=True
     )
     t.start()
@@ -959,6 +968,7 @@ def api_upload_clip():
     hashtags = data.get("hashtags", [])
     platforms = data.get("platforms", ["youtube"])
     privacy = data.get("privacy", "public")
+    publish_at = data.get("publish_at")
     
     if not filename:
         return jsonify({"success": False, "error": "Filename is required"}), 400
@@ -969,7 +979,8 @@ def api_upload_clip():
         description=description,
         hashtags=hashtags,
         platforms=platforms,
-        privacy_status=privacy
+        privacy_status=privacy,
+        publish_at=publish_at
     )
     return jsonify(res)
 
@@ -1045,7 +1056,7 @@ def api_hf_render():
         try:
             HF_JOBS[job_id]["step"] = "Preparing composition and assets..."
             HF_JOBS[job_id]["progress"] = 30
-            hyperframes_editor.setup_and_render_preview(
+            hyperframes_editor.setup_composition(
                 input_video_path=clip_path,
                 style_key=style,
                 badge_text=badge,

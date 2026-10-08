@@ -46,7 +46,8 @@ def ensure_workspace(workspace_dir: Path = WORKSPACE_DIR) -> Path:
             "private": True,
             "type": "module",
             "dependencies": {
-                "gsap": "^3.12.5"
+                "gsap": "^3.12.5",
+                "hyperframes": "^0.8.142"
             }
         }
         pkg_json_path.write_text(json.dumps(pkg_config, indent=2), encoding="utf-8")
@@ -71,6 +72,18 @@ def ensure_workspace(workspace_dir: Path = WORKSPACE_DIR) -> Path:
                 if candidate.is_file():
                     shutil.copy2(candidate, dest_gsap)
                     break
+
+    # 5. Ensure dependencies installed
+    nm_dir = workspace_dir / "node_modules"
+    if not nm_dir.exists():
+        try:
+            if shutil.which("bun"):
+                subprocess.run(["bun", "install"], cwd=str(workspace_dir), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            elif shutil.which("npm"):
+                npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
+                subprocess.run([npm_cmd, "install", "--no-audit", "--no-fund"], cwd=str(workspace_dir), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        except Exception:
+            pass
 
     return workspace_dir
 
@@ -130,6 +143,292 @@ STYLES = {
         "pill_border": "rgba(255, 255, 255, 0.15)",
         "badge_icon": "🎙️",
         "badge_color": "#F1F5F9"
+    },
+    "bold_pop": {
+        "name": "Bold Pop (Opus Classic)",
+        "font": "Impact",
+        "active_color": "#FFE600",
+        "active_glow": "rgba(255, 230, 0, 0.75)",
+        "active_scale": 1.16,
+        "pill_bg": "rgba(0, 0, 0, 0.65)",
+        "pill_border": "rgba(255, 255, 255, 0.12)",
+        "badge_icon": "🔥",
+        "badge_color": "#FFE600"
+    },
+    "karaoke": {
+        "name": "Karaoke Highlight",
+        "font": "Arial",
+        "active_color": "#00E5FF",
+        "active_glow": "rgba(0, 229, 255, 0.75)",
+        "active_scale": 1.12,
+        "pill_bg": "rgba(0, 0, 0, 0.65)",
+        "pill_border": "rgba(0, 229, 255, 0.30)",
+        "badge_icon": "🎤",
+        "badge_color": "#00E5FF"
+    },
+    "boxed_clean": {
+        "name": "Boxed Clean",
+        "font": "Arial",
+        "active_color": "#FFE600",
+        "active_glow": "rgba(255, 230, 0, 0.50)",
+        "active_scale": 1.10,
+        "pill_bg": "rgba(10, 10, 15, 0.90)",
+        "pill_border": "rgba(255, 255, 255, 0.20)",
+        "badge_icon": "⬛",
+        "badge_color": "#F1F5F9"
+    },
+    "minimal_caption": {
+        "name": "Minimal Caption",
+        "font": "Arial",
+        "active_color": "#F0F0F0",
+        "active_glow": "rgba(240, 240, 240, 0.40)",
+        "active_scale": 1.05,
+        "pill_bg": "rgba(15, 20, 25, 0.60)",
+        "pill_border": "rgba(255, 255, 255, 0.10)",
+        "badge_icon": "📝",
+        "badge_color": "#CBD5E1"
+    },
+    "hormozi": {
+        "name": "Hormozi Classic",
+        "font": "Impact",
+        "active_color": "#FFE600",
+        "active_glow": "rgba(255, 230, 0, 0.75)",
+        "active_scale": 1.16,
+        "pill_bg": "rgba(0, 0, 0, 0.65)",
+        "pill_border": "rgba(255, 255, 255, 0.12)",
+        "badge_icon": "⚡",
+        "badge_color": "#FFE600"
+    },
+    "beast": {
+        "name": "Beast Viral",
+        "font": "Impact",
+        "active_color": "#FFD700",
+        "active_glow": "rgba(255, 215, 0, 0.85)",
+        "active_scale": 1.20,
+        "pill_bg": "rgba(10, 10, 15, 0.80)",
+        "pill_border": "rgba(255, 215, 0, 0.35)",
+        "badge_icon": "🌟",
+        "badge_color": "#FFD700"
+    },
+    "neon_green": {
+        "name": "Cyber Neon",
+        "font": "Impact",
+        "active_color": "#39FF14",
+        "active_glow": "rgba(57, 255, 20, 0.85)",
+        "active_scale": 1.18,
+        "pill_bg": "rgba(5, 15, 10, 0.75)",
+        "pill_border": "rgba(57, 255, 20, 0.30)",
+        "badge_icon": "🟢",
+        "badge_color": "#39FF14"
+    },
+    "red_punch": {
+        "name": "Red Punch",
+        "font": "Impact",
+        "active_color": "#FF3B30",
+        "active_glow": "rgba(255, 59, 48, 0.85)",
+        "active_scale": 1.18,
+        "pill_bg": "rgba(20, 5, 5, 0.75)",
+        "pill_border": "rgba(255, 59, 48, 0.35)",
+        "badge_icon": "🔴",
+        "badge_color": "#FF3B30"
+    },
+    "clean_white": {
+        "name": "Minimal White",
+        "font": "Arial",
+        "active_color": "#FFFFFF",
+        "active_glow": "rgba(255, 255, 255, 0.60)",
+        "active_scale": 1.10,
+        "pill_bg": "rgba(15, 20, 30, 0.60)",
+        "pill_border": "rgba(255, 255, 255, 0.15)",
+        "badge_icon": "⚪",
+        "badge_color": "#FFFFFF"
+    },
+    "netflix_standard": {
+        "name": "Netflix Standard",
+        "font": "Arial",
+        "active_color": "#F5F5F5",
+        "active_glow": "rgba(245, 245, 245, 0.40)",
+        "active_scale": 1.05,
+        "pill_bg": "rgba(0, 0, 0, 0.70)",
+        "pill_border": "rgba(255, 255, 255, 0.10)",
+        "badge_icon": "🎬",
+        "badge_color": "#EF4444"
+    },
+    "bbc_sdh": {
+        "name": "BBC SDH Boxed",
+        "font": "Arial",
+        "active_color": "#FFE600",
+        "active_glow": "rgba(255, 230, 0, 0.40)",
+        "active_scale": 1.05,
+        "pill_bg": "rgba(0, 0, 0, 0.95)",
+        "pill_border": "rgba(255, 255, 255, 0.15)",
+        "badge_icon": "📺",
+        "badge_color": "#FFE600"
+    },
+    "cinematic_auteur": {
+        "name": "Cinematic Auteur",
+        "font": "Georgia",
+        "active_color": "#E8F0F8",
+        "active_glow": "rgba(232, 240, 248, 0.50)",
+        "active_scale": 1.08,
+        "pill_bg": "rgba(10, 10, 15, 0.65)",
+        "pill_border": "rgba(232, 240, 248, 0.20)",
+        "badge_icon": "🎞️",
+        "badge_color": "#FBBF24"
+    },
+    "kinetic_pop": {
+        "name": "Kinetic Pop",
+        "font": "Impact",
+        "active_color": "#FFE600",
+        "active_glow": "rgba(255, 230, 0, 0.85)",
+        "active_scale": 1.20,
+        "pill_bg": "rgba(0, 0, 0, 0.70)",
+        "pill_border": "rgba(255, 230, 0, 0.35)",
+        "badge_icon": "⚡",
+        "badge_color": "#FFE600"
+    },
+    "wild_den": {
+        "name": "Wild Den Bold",
+        "font": "Impact",
+        "active_color": "#FFE600",
+        "active_glow": "rgba(255, 230, 0, 0.75)",
+        "active_scale": 1.15,
+        "pill_bg": "rgba(0, 0, 0, 0.65)",
+        "pill_border": "rgba(255, 255, 255, 0.12)",
+        "badge_icon": "🏔️",
+        "badge_color": "#00F2FE"
+    },
+    "iman_gadzhi": {
+        "name": "Iman Gadzhi Luxury",
+        "font": "Georgia",
+        "active_color": "#FFD700",
+        "active_glow": "rgba(255, 215, 0, 0.80)",
+        "active_scale": 1.15,
+        "pill_bg": "rgba(15, 10, 5, 0.75)",
+        "pill_border": "rgba(255, 215, 0, 0.30)",
+        "badge_icon": "👑",
+        "badge_color": "#FBBF24"
+    },
+    "joe_rogan": {
+        "name": "Joe Rogan Podcast",
+        "font": "Arial",
+        "active_color": "#FF3B30",
+        "active_glow": "rgba(255, 59, 48, 0.75)",
+        "active_scale": 1.14,
+        "pill_bg": "rgba(10, 10, 12, 0.85)",
+        "pill_border": "rgba(255, 59, 48, 0.30)",
+        "badge_icon": "🎙️",
+        "badge_color": "#EF4444"
+    },
+    "ali_abdaal": {
+        "name": "Ali Abdaal Clean",
+        "font": "Arial",
+        "active_color": "#38BDF8",
+        "active_glow": "rgba(56, 189, 248, 0.70)",
+        "active_scale": 1.10,
+        "pill_bg": "rgba(15, 23, 42, 0.65)",
+        "pill_border": "rgba(56, 189, 248, 0.25)",
+        "badge_icon": "📚",
+        "badge_color": "#38BDF8"
+    },
+    "vox_explainer": {
+        "name": "Vox Journalism",
+        "font": "Arial",
+        "active_color": "#FFE600",
+        "active_glow": "rgba(255, 230, 0, 0.80)",
+        "active_scale": 1.15,
+        "pill_bg": "rgba(0, 0, 0, 0.85)",
+        "pill_border": "rgba(255, 230, 0, 0.35)",
+        "badge_icon": "📰",
+        "badge_color": "#FFE600"
+    },
+    "andrew_huberman": {
+        "name": "Huberman Lab",
+        "font": "Arial",
+        "active_color": "#2DD4BF",
+        "active_glow": "rgba(45, 212, 191, 0.70)",
+        "active_scale": 1.10,
+        "pill_bg": "rgba(10, 20, 20, 0.70)",
+        "pill_border": "rgba(45, 212, 191, 0.25)",
+        "badge_icon": "🧠",
+        "badge_color": "#2DD4BF"
+    },
+    "david_goggins": {
+        "name": "David Goggins Savage",
+        "font": "Impact",
+        "active_color": "#FF4500",
+        "active_glow": "rgba(255, 69, 0, 0.90)",
+        "active_scale": 1.22,
+        "pill_bg": "rgba(20, 10, 5, 0.80)",
+        "pill_border": "rgba(255, 69, 0, 0.40)",
+        "badge_icon": "🔥",
+        "badge_color": "#FF4500"
+    },
+    "luke_belmar": {
+        "name": "Belmar Matrix Glitch",
+        "font": "Impact",
+        "active_color": "#22C55E",
+        "active_glow": "rgba(34, 197, 94, 0.85)",
+        "active_scale": 1.18,
+        "pill_bg": "rgba(5, 15, 10, 0.85)",
+        "pill_border": "rgba(34, 197, 94, 0.35)",
+        "badge_icon": "⚡",
+        "badge_color": "#22C55E"
+    },
+    "diary_of_a_ceo": {
+        "name": "Diary of a CEO",
+        "font": "Arial",
+        "active_color": "#E2E8F0",
+        "active_glow": "rgba(226, 232, 240, 0.60)",
+        "active_scale": 1.10,
+        "pill_bg": "rgba(15, 15, 18, 0.75)",
+        "pill_border": "rgba(255, 255, 255, 0.15)",
+        "badge_icon": "💼",
+        "badge_color": "#E2E8F0"
+    },
+    "fintech_pro": {
+        "name": "Fintech Ticker",
+        "font": "Arial",
+        "active_color": "#10B981",
+        "active_glow": "rgba(16, 185, 129, 0.75)",
+        "active_scale": 1.12,
+        "pill_bg": "rgba(5, 20, 15, 0.80)",
+        "pill_border": "rgba(16, 185, 129, 0.30)",
+        "badge_icon": "📈",
+        "badge_color": "#10B981"
+    },
+    "anime_shonen": {
+        "name": "Shonen Action",
+        "font": "Impact",
+        "active_color": "#FF8C00",
+        "active_glow": "rgba(255, 140, 0, 0.85)",
+        "active_scale": 1.20,
+        "pill_bg": "rgba(25, 10, 20, 0.80)",
+        "pill_border": "rgba(255, 140, 0, 0.35)",
+        "badge_icon": "⚔️",
+        "badge_color": "#FF8C00"
+    },
+    "retro_vhs": {
+        "name": "Retro VHS Synthwave",
+        "font": "Impact",
+        "active_color": "#F43F5E",
+        "active_glow": "rgba(244, 63, 94, 0.85)",
+        "active_scale": 1.16,
+        "pill_bg": "rgba(20, 5, 25, 0.80)",
+        "pill_border": "rgba(244, 63, 94, 0.35)",
+        "badge_icon": "📼",
+        "badge_color": "#F43F5E"
+    },
+    "streetwear_hype": {
+        "name": "Streetwear Hype",
+        "font": "Impact",
+        "active_color": "#FACC15",
+        "active_glow": "rgba(250, 204, 21, 0.80)",
+        "active_scale": 1.18,
+        "pill_bg": "rgba(10, 10, 10, 0.90)",
+        "pill_border": "rgba(250, 204, 21, 0.35)",
+        "badge_icon": "👟",
+        "badge_color": "#FACC15"
     }
 }
 
@@ -194,11 +493,23 @@ def get_video_duration(video_path: Path) -> float:
     res = subprocess.run(cmd, capture_output=True, text=True)
     return float(res.stdout.strip()) if res.returncode == 0 and res.stdout.strip() else 0.0
 
-def detect_audio_spikes(video_path: Path, spike_db: float = 7.0) -> List[Tuple[float, float]]:
-    """Extracts loud moments to trigger punch zooms."""
+def detect_audio_spikes(
+    video_path: Path, 
+    min_spacing: float = 7.0, 
+    max_spikes: int = 4
+) -> List[Tuple[float, float]]:
+    """
+    Extracts only true high-impact energy peaks to trigger well-placed punch zooms.
+    Enforces minimum 7.0s spacing and caps total zooms to prevent rapid yo-yo zooming.
+    """
     import numpy as np
+    try:
+        ffmpeg_exe = get_ffmpeg_path()
+    except Exception:
+        ffmpeg_exe = "ffmpeg"
+
     cmd = [
-        "ffmpeg", "-v", "error", "-i", str(video_path),
+        ffmpeg_exe, "-v", "error", "-i", str(video_path),
         "-vn", "-ac", "1", "-ar", "16000", "-f", "s16le", "-"
     ]
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -213,16 +524,27 @@ def detect_audio_spikes(video_path: Path, spike_db: float = 7.0) -> List[Tuple[f
         return []
     rms_vals = [np.sqrt(np.mean(samples[i*hop:(i+1)*hop]**2) + 1e-9) for i in range(num_win)]
     db_arr = 20 * np.log10(np.array(rms_vals) + 1e-5)
-    thresh = np.mean(db_arr) + spike_db
-    spikes = []
-    last_end = -1.0
+    p90 = np.percentile(db_arr, 90)
+
+    # Collect candidate peaks in top 10% loudness
+    candidates = []
     for i, db in enumerate(db_arr):
-        t_start = round(i * 0.25, 2)
-        t_end = round(t_start + 1.4, 2)
-        if db > thresh and t_start >= (last_end + 1.5):
-            spikes.append((t_start, t_end))
-            last_end = t_end
-    return spikes
+        if db >= p90:
+            t = round(i * 0.25, 2)
+            candidates.append((t, db))
+
+    # Pick top highest energy peaks separated by at least min_spacing
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    selected = []
+    for t, db in candidates:
+        if all(abs(t - st) >= min_spacing for st, _ in selected):
+            selected.append((t, db))
+            if len(selected) >= max_spikes:
+                break
+
+    # Sort selected spikes chronologically
+    selected.sort(key=lambda x: x[0])
+    return [(round(t, 2), round(t + 1.25, 2)) for t, _ in selected]
 
 def generate_composition_html(
     video_rel_path: str,
@@ -300,12 +622,12 @@ def generate_composition_html(
         {round(w_start + w_dur, 2)}
       );''')
 
-    # Zooms in GSAP
+    # Zooms in GSAP - smooth punch in, hold, and smooth ease-in-out reset
     zoom_lines = []
     if zoom_scale > 1.01:
         for z_s, z_e in zooms:
-            zoom_lines.append(f'''      tl.to("#video-wrapper", {{ scale: {zoom_scale}, duration: 0.22, ease: "power3.out" }}, {z_s});''')
-            zoom_lines.append(f'''      tl.to("#video-wrapper", {{ scale: 1.0, duration: 0.35, ease: "power2.inOut" }}, {z_e});''')
+            zoom_lines.append(f'''      tl.to("#video-wrapper", {{ scale: {zoom_scale}, duration: 0.28, ease: "power2.out" }}, {z_s});''')
+            zoom_lines.append(f'''      tl.to("#video-wrapper", {{ scale: 1.0, duration: 0.40, ease: "power2.inOut" }}, {z_e});''')
 
     badge_html = ""
     if badge_text.strip():
@@ -361,7 +683,7 @@ def generate_composition_html(
         position: absolute;
         inset: 0;
         pointer-events: none;
-        background: radial-gradient(circle at 50% 45%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.55) 100%);
+        background: radial-gradient(circle at 50% 45%, rgba(0,0,0,0) 75%, rgba(0,0,0,0.30) 100%);
       }}
       #status-badge {{
         position: absolute;
@@ -391,17 +713,6 @@ def generate_composition_html(
         letter-spacing: 0.12em;
         text-transform: uppercase;
         color: #f1f5f9;
-      }}
-      #subtitle-shield {{
-        position: absolute;
-        bottom: 180px;
-        left: 0;
-        width: 1080px;
-        height: 520px;
-        background: radial-gradient(ellipse 95% 70% at 50% 50%, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.82) 65%, rgba(0, 0, 0, 0) 100%);
-        backdrop-filter: blur(16px);
-        pointer-events: none;
-        z-index: 1;
       }}
       .sub-chunk {{
         position: absolute;
@@ -475,7 +786,6 @@ def generate_composition_html(
         data-duration="{duration:.2f}"
       ></audio>
       <div id="vignette"></div>
-      <div id="subtitle-shield"></div>
 {badge_html}
 {"\n".join(html_chunks)}
     </div>
@@ -528,13 +838,75 @@ def prepare_clean_base_video(input_video_path: Path, target_base: Path) -> str:
         shutil.copy2(input_video_path, target_base)
         return "fallback_copy"
 
-def setup_and_render_preview(
+def get_hyperframes_cli_cmd() -> List[str]:
+    """
+    Resolves the appropriate Hyperframes CLI runner for non-interactive execution.
+    Prioritizes local node_modules binary, then bunx, then npx with automatic prompt acceptance (--yes).
+    """
+    local_bin_exe = WORKSPACE_DIR / "node_modules" / ".bin" / "hyperframes.exe"
+    local_bin_cmd = WORKSPACE_DIR / "node_modules" / ".bin" / "hyperframes.cmd"
+    local_bin_unix = WORKSPACE_DIR / "node_modules" / ".bin" / "hyperframes"
+    if local_bin_exe.exists():
+        return [str(local_bin_exe)]
+    elif sys.platform == "win32" and local_bin_cmd.exists():
+        return [str(local_bin_cmd)]
+    elif local_bin_unix.exists():
+        return [str(local_bin_unix)]
+
+    # Check for bun / bunx
+    if shutil.which("bun") or shutil.which("bunx"):
+        return ["bunx", "hyperframes"]
+
+    # Check for npx
+    if shutil.which("npx"):
+        # Always use --yes so npx never prompts "Ok to proceed? (y)" on missing package
+        return ["npx", "--yes", "hyperframes"]
+
+    raise RuntimeError(
+        "Neither Node.js (npx) nor Bun was found on this system. "
+        "Please install Node.js (https://nodejs.org) or Bun (https://bun.sh) to enable Hyperframes rendering."
+    )
+
+def run_hyperframes_command(args: List[str], cwd: Path = WORKSPACE_DIR, timeout: int = 600) -> subprocess.CompletedProcess:
+    """
+    Executes a Hyperframes CLI command safely in non-interactive mode.
+    Guarantees stdin=DEVNULL to prevent hanging prompts, captures output, and raises clean errors.
+    """
+    base_cmd = get_hyperframes_cli_cmd()
+    full_cmd = base_cmd + args
+    print(f"  [Hyperframes CLI] Executing: {' '.join(full_cmd)} in {cwd}", flush=True)
+
+    use_shell = sys.platform == "win32"
+    cmd_to_run = " ".join(f'"{a}"' if " " in a else a for a in full_cmd) if use_shell else full_cmd
+
+    try:
+        proc = subprocess.run(
+            cmd_to_run,
+            cwd=str(cwd),
+            shell=use_shell,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"Hyperframes operation timed out after {timeout} seconds.")
+    except Exception as e:
+        raise RuntimeError(f"Failed to execute Hyperframes CLI: {e}")
+
+    if proc.returncode != 0:
+        err_msg = proc.stderr.strip() or proc.stdout.strip() or f"Process exited with code {proc.returncode}"
+        raise RuntimeError(f"Hyperframes CLI failed (code {proc.returncode}): {err_msg}")
+
+    return proc
+
+def setup_composition(
     input_video_path: Path,
     style_key: str = "viral_pop",
     badge_text: str = "",
     zoom_intensity: str = "dynamic"
 ) -> Dict[str, Any]:
-    """Generates contact sheet preview for user approval."""
+    """Prepares clean base video, transcribes words, and writes index.html composition."""
     if not input_video_path.exists():
         raise FileNotFoundError(f"Input video not found: {input_video_path}")
 
@@ -549,9 +921,9 @@ def setup_and_render_preview(
     # Check for existing words or transcribe
     words = extract_transcript_words(target_base)
     
-    # Zoom scale mapping
-    zoom_scales = {"none": 1.0, "subtle": 1.08, "dynamic": 1.15, "aggressive": 1.22}
-    scale = zoom_scales.get(zoom_intensity, 1.15)
+    # Zoom scale mapping (natural, non-jarring punch zooms)
+    zoom_scales = {"none": 1.0, "subtle": 1.06, "dynamic": 1.10, "aggressive": 1.15}
+    scale = zoom_scales.get(zoom_intensity, 1.10)
     zooms = detect_audio_spikes(target_base) if scale > 1.01 else []
 
     # Auto badge if blank
@@ -573,6 +945,28 @@ def setup_and_render_preview(
     with open(index_path, "w", encoding="utf-8") as f:
         f.write(html)
 
+    return {
+        "status": "ready",
+        "duration": duration,
+        "word_count": len(words),
+        "zoom_count": len(zooms)
+    }
+
+def setup_and_render_preview(
+    input_video_path: Path,
+    style_key: str = "viral_pop",
+    badge_text: str = "",
+    zoom_intensity: str = "dynamic"
+) -> Dict[str, Any]:
+    """Generates contact sheet preview for user approval."""
+    comp_info = setup_composition(
+        input_video_path=input_video_path,
+        style_key=style_key,
+        badge_text=badge_text,
+        zoom_intensity=zoom_intensity
+    )
+    duration = comp_info["duration"]
+
     # Calculate sample times for snapshot
     sample_times = [
         round(duration * 0.05, 1),
@@ -584,17 +978,11 @@ def setup_and_render_preview(
     ]
     sample_arg = ",".join(str(t) for t in sample_times)
 
-    snap_cmd = f"npx hyperframes snapshot . --at {sample_arg}"
-    subprocess.run(snap_cmd, shell=True, cwd=str(WORKSPACE_DIR), check=True)
+    run_hyperframes_command(["snapshot", ".", "--at", sample_arg])
 
     sheet_path = WORKSPACE_DIR / "snapshots" / "contact-sheet.jpg"
-    return {
-        "status": "ready",
-        "contact_sheet": str(sheet_path),
-        "duration": duration,
-        "word_count": len(words),
-        "zoom_count": len(zooms)
-    }
+    comp_info["contact_sheet"] = str(sheet_path)
+    return comp_info
 
 def render_final_deliverables(
     output_prefix: str,
@@ -607,8 +995,7 @@ def render_final_deliverables(
     preview_file = output_dir / f"{output_prefix}_hyperframes_preview.mp4"
 
     # Step 1: Render master via Hyperframes
-    render_cmd = f"npx hyperframes render . -o \"{master_file}\""
-    subprocess.run(render_cmd, shell=True, cwd=str(WORKSPACE_DIR), check=True)
+    run_hyperframes_command(["render", ".", "-o", str(master_file)])
 
     # Step 2: Encode mobile preview (< 3 MB)
     dur = get_video_duration(master_file)

@@ -120,7 +120,8 @@ def process_video(
     enable_bg_music: bool = False,
     bg_music_volume: float = 0.12,
     time_range_start: Optional[Any] = None,
-    time_range_end: Optional[Any] = None
+    time_range_end: Optional[Any] = None,
+    custom_subtitle_style: Optional[Dict] = None
 ):
     print("=" * 60)
     print("  AUTONOMOUS PODCAST-TO-SHORTS CLIPPING ENGINE")
@@ -235,7 +236,8 @@ def process_video(
             enable_auto_bleep=enable_auto_bleep,
             enable_slow_zoom=enable_slow_zoom,
             enable_bg_music=enable_bg_music,
-            bg_music_volume=bg_music_volume
+            bg_music_volume=bg_music_volume,
+            custom_subtitle_style=custom_subtitle_style
         )
 
         if success and output_mp4.exists():

@@ -256,85 +256,250 @@
 
           <!-- Subtitle Style Row -->
           <div class="space-y-3 pt-3 border-t border-slate-800/80">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5">
                 <i data-lucide="type" class="w-4 h-4 text-indigo-400"></i>
-                <span>Subtitle Style:</span>
-              </span>
-              <span id="stylePreviewBadge" class="text-[11px] font-bold px-2 py-0.5 rounded border text-yellow-400 border-yellow-500/30 bg-yellow-500/10">
-                🏔️ Wild Den (Outdoor Viral)
-              </span>
+                <span class="text-xs font-semibold text-slate-300">Subtitle Style (27 Presets):</span>
+                <span id="stylePreviewBadge" class="text-[11px] font-bold px-2 py-0.5 rounded border text-yellow-400 border-yellow-500/30 bg-yellow-500/10">
+                  🏔️ Wild Den (Outdoor Viral)
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="toggleSubtitleCustomizer()" id="btnToggleCustomizer" class="text-xs font-bold px-2.5 py-1 rounded-lg bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 hover:text-white hover:bg-indigo-600/50 transition flex items-center gap-1.5 shadow-sm">
+                  <span>🎨 Customize Studio</span>
+                  <span id="customActiveDot" class="hidden w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                </button>
+              </div>
             </div>
 
-            <!-- Style Selection Grid -->
-            <div class="grid grid-cols-3 sm:grid-cols-5 gap-2" id="stylePicker">
-              <button type="button" onclick="setSubtitleStyle('bold_pop')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="bold_pop">
-                <span class="text-xs font-bold text-yellow-300">🔥 Bold Pop</span>
-                <span class="text-[9px] text-slate-400">Opus Classic</span>
-              </button>
-              <button type="button" onclick="setSubtitleStyle('karaoke')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="karaoke">
-                <span class="text-xs font-bold text-cyan-400">🎤 Karaoke</span>
-                <span class="text-[9px] text-slate-400">Live Word Fill</span>
-              </button>
-              <button type="button" onclick="setSubtitleStyle('boxed_clean')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="boxed_clean">
-                <span class="text-xs font-bold text-slate-200">⬛ Boxed</span>
-                <span class="text-[9px] text-slate-400">Dark Badge</span>
-              </button>
-              <button type="button" onclick="setSubtitleStyle('minimal_caption')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="minimal_caption">
-                <span class="text-xs font-bold text-slate-300">📝 Minimal</span>
-                <span class="text-[9px] text-slate-400">Subtle Caption</span>
-              </button>
-              <button type="button" onclick="setSubtitleStyle('hormozi')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="hormozi">
-                <span class="text-xs font-bold text-yellow-400">⚡ Hormozi</span>
-                <span class="text-[9px] text-slate-400">Yellow + White</span>
-              </button>
-              <button type="button" onclick="setSubtitleStyle('beast')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="beast">
-                <span class="text-xs font-bold text-amber-400">🌟 Beast</span>
-                <span class="text-[9px] text-slate-400">Electric Yellow</span>
-              </button>
-              <button type="button" onclick="setSubtitleStyle('neon_green')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="neon_green">
-                <span class="text-xs font-bold text-emerald-400">🟢 Cyber</span>
-                <span class="text-[9px] text-slate-400">Neon Green</span>
-              </button>
-              <button type="button" onclick="setSubtitleStyle('red_punch')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="red_punch">
-                <span class="text-xs font-bold text-rose-400">🔴 Punch</span>
-                <span class="text-[9px] text-slate-400">Hot Red</span>
-              </button>
-              <button type="button" onclick="setSubtitleStyle('clean_white')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="clean_white">
-                <span class="text-xs font-bold text-slate-200">⚪ Clean</span>
-                <span class="text-[9px] text-slate-400">Clean White</span>
-              </button>
-              <button type="button" onclick="setSubtitleStyle('netflix_standard')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="netflix_standard">
-                <span class="text-xs font-bold text-red-400">🎬 Netflix</span>
-                <span class="text-[9px] text-slate-400">20 CPS Clean</span>
-              </button>
-              <button type="button" onclick="setSubtitleStyle('bbc_sdh')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="bbc_sdh">
-                <span class="text-xs font-bold text-yellow-300">📺 BBC SDH</span>
-                <span class="text-[9px] text-slate-400">Broadcast Box</span>
-              </button>
-              <button type="button" onclick="setSubtitleStyle('cinematic_auteur')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="cinematic_auteur">
-                <span class="text-xs font-bold text-amber-300">🎞️ Auteur</span>
-                <span class="text-[9px] text-slate-400">Serif Letterbox</span>
-              </button>
-              <button type="button" onclick="setSubtitleStyle('kinetic_pop')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="kinetic_pop">
-                <span class="text-xs font-bold text-yellow-300">⚡ Kinetic</span>
-                <span class="text-[9px] text-slate-400">TikTok / Reels</span>
-              </button>
-              <button type="button" onclick="setSubtitleStyle('wild_den')" class="style-btn p-2 rounded-xl border border-indigo-500 bg-indigo-600/20 text-white text-left transition flex flex-col items-center justify-center gap-0.5 shadow-lg" data-style="wild_den">
+            <!-- Category Filter Pills -->
+            <div class="flex items-center gap-1.5 flex-wrap text-xs" id="styleCategoryTabs">
+              <button type="button" onclick="filterSubtitleCategory('all')" class="style-cat-pill px-2.5 py-0.5 rounded-full border text-[11px] font-semibold bg-indigo-600/30 border-indigo-500/50 text-white" data-cat="all">All (27)</button>
+              <button type="button" onclick="filterSubtitleCategory('viral')" class="style-cat-pill px-2.5 py-0.5 rounded-full border text-[11px] font-semibold bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white" data-cat="viral">🔥 Viral Creators</button>
+              <button type="button" onclick="filterSubtitleCategory('podcast')" class="style-cat-pill px-2.5 py-0.5 rounded-full border text-[11px] font-semibold bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white" data-cat="podcast">🎙️ Podcasts & Talk</button>
+              <button type="button" onclick="filterSubtitleCategory('journalism')" class="style-cat-pill px-2.5 py-0.5 rounded-full border text-[11px] font-semibold bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white" data-cat="journalism">📰 Journalism & Film</button>
+              <button type="button" onclick="filterSubtitleCategory('highenergy')" class="style-cat-pill px-2.5 py-0.5 rounded-full border text-[11px] font-semibold bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white" data-cat="highenergy">⚡ Cyber & High Energy</button>
+            </div>
+
+            <!-- Style Selection Grid (All 27 Presets) -->
+            <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 max-h-[260px] overflow-y-auto pr-1 select-none" id="stylePicker">
+              <!-- Viral Creators -->
+              <button type="button" onclick="setSubtitleStyle('wild_den')" class="style-btn p-2 rounded-xl border border-indigo-500 bg-indigo-600/20 text-white text-left transition flex flex-col items-center justify-center gap-0.5 shadow-lg" data-style="wild_den" data-category="viral">
                 <span class="text-xs font-bold text-yellow-400">🏔️ Wild Den</span>
                 <span class="text-[9px] text-slate-400">Outdoor Viral</span>
               </button>
-              <button type="button" onclick="setSubtitleStyle('none')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="none">
-                <span class="text-xs font-bold text-slate-300">🚫 No Subtitles</span>
+              <button type="button" onclick="setSubtitleStyle('hormozi')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="hormozi" data-category="viral">
+                <span class="text-xs font-bold text-yellow-400">⚡ Hormozi</span>
+                <span class="text-[9px] text-slate-400">Yellow + White</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('beast')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="beast" data-category="viral">
+                <span class="text-xs font-bold text-amber-400">🌟 Beast</span>
+                <span class="text-[9px] text-slate-400">Electric Yellow</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('kinetic_pop')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="kinetic_pop" data-category="viral">
+                <span class="text-xs font-bold text-yellow-300">⚡ Kinetic</span>
+                <span class="text-[9px] text-slate-400">TikTok / Reels</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('bold_pop')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="bold_pop" data-category="viral">
+                <span class="text-xs font-bold text-yellow-300">🔥 Bold Pop</span>
+                <span class="text-[9px] text-slate-400">Opus Classic</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('karaoke')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="karaoke" data-category="viral">
+                <span class="text-xs font-bold text-cyan-400">🎤 Karaoke</span>
+                <span class="text-[9px] text-slate-400">Live Word Fill</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('streetwear_hype')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="streetwear_hype" data-category="viral">
+                <span class="text-xs font-bold text-yellow-400">👟 Streetwear</span>
+                <span class="text-[9px] text-slate-400">Hype Brutalist</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('david_goggins')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="david_goggins" data-category="viral">
+                <span class="text-xs font-bold text-orange-400">🔥 Goggins</span>
+                <span class="text-[9px] text-slate-400">Stay Hard</span>
+              </button>
+
+              <!-- Podcasts & Talk -->
+              <button type="button" onclick="setSubtitleStyle('joe_rogan')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="joe_rogan" data-category="podcast">
+                <span class="text-xs font-bold text-red-400">🎙️ Joe Rogan</span>
+                <span class="text-[9px] text-slate-400">Podcast Dark</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('diary_of_a_ceo')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="diary_of_a_ceo" data-category="podcast">
+                <span class="text-xs font-bold text-amber-200">💼 CEO Diary</span>
+                <span class="text-[9px] text-slate-400">Bartlett Clean</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('minimal_caption')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="minimal_caption" data-category="podcast">
+                <span class="text-xs font-bold text-slate-300">📝 Minimal</span>
+                <span class="text-[9px] text-slate-400">Subtle Caption</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('boxed_clean')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="boxed_clean" data-category="podcast">
+                <span class="text-xs font-bold text-slate-200">⬛ Boxed</span>
+                <span class="text-[9px] text-slate-400">Dark Badge</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('clean_white')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="clean_white" data-category="podcast">
+                <span class="text-xs font-bold text-slate-200">⚪ Clean</span>
+                <span class="text-[9px] text-slate-400">Clean White</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('ali_abdaal')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="ali_abdaal" data-category="podcast">
+                <span class="text-xs font-bold text-sky-300">📚 Ali Abdaal</span>
+                <span class="text-[9px] text-slate-400">Notion Minimal</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('andrew_huberman')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="andrew_huberman" data-category="podcast">
+                <span class="text-xs font-bold text-teal-300">🧠 Huberman</span>
+                <span class="text-[9px] text-slate-400">Neuro Teal</span>
+              </button>
+
+              <!-- Journalism & Cinema -->
+              <button type="button" onclick="setSubtitleStyle('iman_gadzhi')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="iman_gadzhi" data-category="journalism">
+                <span class="text-xs font-bold text-amber-300">👑 Iman Gadzhi</span>
+                <span class="text-[9px] text-slate-400">Couture Gold</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('vox_explainer')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="vox_explainer" data-category="journalism">
+                <span class="text-xs font-bold text-yellow-300">📰 Vox News</span>
+                <span class="text-[9px] text-slate-400">Editorial Yellow</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('cinematic_auteur')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="cinematic_auteur" data-category="journalism">
+                <span class="text-xs font-bold text-amber-300">🎞️ Auteur</span>
+                <span class="text-[9px] text-slate-400">Serif Letterbox</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('netflix_standard')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="netflix_standard" data-category="journalism">
+                <span class="text-xs font-bold text-red-400">🎬 Netflix</span>
+                <span class="text-[9px] text-slate-400">20 CPS Clean</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('bbc_sdh')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="bbc_sdh" data-category="journalism">
+                <span class="text-xs font-bold text-yellow-300">📺 BBC SDH</span>
+                <span class="text-[9px] text-slate-400">Broadcast Box</span>
+              </button>
+
+              <!-- Cyber & High Energy -->
+              <button type="button" onclick="setSubtitleStyle('neon_green')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="neon_green" data-category="highenergy">
+                <span class="text-xs font-bold text-emerald-400">🟢 Cyber Neon</span>
+                <span class="text-[9px] text-slate-400">Matrix Glow</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('red_punch')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="red_punch" data-category="highenergy">
+                <span class="text-xs font-bold text-rose-400">🔴 Hot Punch</span>
+                <span class="text-[9px] text-slate-400">Flame Red</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('luke_belmar')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="luke_belmar" data-category="highenergy">
+                <span class="text-xs font-bold text-lime-400">⚡ Belmar</span>
+                <span class="text-[9px] text-slate-400">Matrix Glitch</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('fintech_pro')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="fintech_pro" data-category="highenergy">
+                <span class="text-xs font-bold text-emerald-400">📈 Fintech</span>
+                <span class="text-[9px] text-slate-400">Ticker Green</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('anime_shonen')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="anime_shonen" data-category="highenergy">
+                <span class="text-xs font-bold text-pink-400">⚔️ Shonen</span>
+                <span class="text-[9px] text-slate-400">Power Burst</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('retro_vhs')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="retro_vhs" data-category="highenergy">
+                <span class="text-xs font-bold text-fuchsia-400">📼 Retro VHS</span>
+                <span class="text-[9px] text-slate-400">80s Synthwave</span>
+              </button>
+              <button type="button" onclick="setSubtitleStyle('none')" class="style-btn p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white hover:border-slate-700 text-left transition flex flex-col items-center justify-center gap-0.5" data-style="none" data-category="highenergy">
+                <span class="text-xs font-bold text-slate-300">🚫 No Subs</span>
                 <span class="text-[9px] text-slate-400">Raw 9:16 Video</span>
               </button>
             </div>
 
             <!-- Interactive Live Subtitle Sample Box -->
-            <div id="subtitlePreviewBox" class="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800/80 text-center flex items-center justify-center min-h-[52px]">
+            <div id="subtitlePreviewBox" class="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800/80 text-center flex items-center justify-center min-h-[58px] transition">
               <span id="previewSampleText" class="text-sm sm:text-base font-black tracking-wider uppercase drop-shadow-[0_2px_8px_rgba(0,0,0,1)]">
                 <span class="text-yellow-400 text-lg" style="-webkit-text-stroke: 1.5px black;">NEVER</span> <span class="text-white" style="-webkit-text-stroke: 1.5px black;">GIVE UP</span>
               </span>
+            </div>
+
+            <!-- Live Subtitle Customizer Studio Drawer -->
+            <div id="subtitleCustomizerDrawer" class="hidden p-4 rounded-xl bg-slate-950/90 border border-indigo-500/30 space-y-4 shadow-xl transition-all">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                    <span>✨ Live Subtitle Customizer Studio</span>
+                  </span>
+                  <span id="customStudioStatus" class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">Preset Linked</span>
+                </div>
+                <button type="button" onclick="resetCustomizerToPreset()" class="text-[11px] text-slate-400 hover:text-amber-300 underline transition">Reset to Preset</button>
+              </div>
+
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <!-- Font Family -->
+                <div class="space-y-1">
+                  <label class="text-slate-400 font-semibold text-[11px]">Font Family</label>
+                  <select id="customFont" onchange="onCustomStyleParamChanged()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs focus:border-indigo-500">
+                    <option value="Arial">Arial (Universal Clean)</option>
+                    <option value="Impact">Impact (Viral Heavy)</option>
+                    <option value="Georgia">Georgia (Luxury Serif)</option>
+                    <option value="Montserrat">Montserrat (Modern Sans)</option>
+                    <option value="Inter">Inter (Sleek UI)</option>
+                    <option value="Bangers">Bangers (Comic / Meme)</option>
+                    <option value="Bebas Neue">Bebas Neue (Tall Punch)</option>
+                    <option value="Roboto">Roboto (Crisp Grotesque)</option>
+                  </select>
+                </div>
+
+                <!-- Font Size Slider -->
+                <div class="space-y-1">
+                  <div class="flex justify-between">
+                    <label class="text-slate-400 font-semibold text-[11px]">Font Size</label>
+                    <span id="customFontSizeVal" class="text-indigo-400 font-mono text-[11px]">58px</span>
+                  </div>
+                  <input type="range" id="customFontSize" min="32" max="80" value="58" oninput="onCustomStyleParamChanged()" class="w-full accent-indigo-500 cursor-pointer">
+                </div>
+
+                <!-- Primary Text Color -->
+                <div class="space-y-1">
+                  <label class="text-slate-400 font-semibold text-[11px]">Primary Color</label>
+                  <div class="flex items-center gap-2">
+                    <input type="color" id="customPrimaryColor" value="#FFFFFF" onchange="onCustomStyleParamChanged()" class="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer">
+                    <input type="text" id="customPrimaryColorHex" value="#FFFFFF" oninput="syncHexToColor('customPrimaryColor', this.value)" class="w-20 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-white text-xs font-mono">
+                  </div>
+                </div>
+
+                <!-- Active Highlight Color -->
+                <div class="space-y-1">
+                  <label class="text-slate-400 font-semibold text-[11px]">Highlight Color</label>
+                  <div class="flex items-center gap-2">
+                    <input type="color" id="customHighlightColor" value="#FFE600" onchange="onCustomStyleParamChanged()" class="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer">
+                    <input type="text" id="customHighlightColorHex" value="#FFE600" oninput="syncHexToColor('customHighlightColor', this.value)" class="w-20 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-white text-xs font-mono">
+                  </div>
+                </div>
+
+                <!-- Outline Thickness -->
+                <div class="space-y-1">
+                  <div class="flex justify-between">
+                    <label class="text-slate-400 font-semibold text-[11px]">Outline Border</label>
+                    <span id="customOutlineVal" class="text-indigo-400 font-mono text-[11px]">6px</span>
+                  </div>
+                  <input type="range" id="customOutline" min="0" max="10" step="0.5" value="6" oninput="onCustomStyleParamChanged()" class="w-full accent-indigo-500 cursor-pointer">
+                </div>
+
+                <!-- Vertical Placement -->
+                <div class="space-y-1">
+                  <label class="text-slate-400 font-semibold text-[11px]">Position</label>
+                  <select id="customPosition" onchange="onCustomStyleParamChanged()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs focus:border-indigo-500">
+                    <option value="420">Bottom (Standard 420px)</option>
+                    <option value="960">Center (Dead Center 960px)</option>
+                    <option value="1500">Top (Third 1500px)</option>
+                  </select>
+                </div>
+
+                <!-- Animation Mode -->
+                <div class="space-y-1">
+                  <label class="text-slate-400 font-semibold text-[11px]">Animation Mode</label>
+                  <select id="customAnimMode" onchange="onCustomStyleParamChanged()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs focus:border-indigo-500">
+                    <option value="pop">Per-Word Active Pop</option>
+                    <option value="karaoke">Live Karaoke Fill</option>
+                    <option value="static">Static Clean (No Bounce)</option>
+                  </select>
+                </div>
+
+                <!-- Uppercase & Options -->
+                <div class="space-y-2 pt-1 flex flex-col justify-end">
+                  <label class="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" id="customUppercase" checked onchange="onCustomStyleParamChanged()" class="rounded border-slate-700 text-indigo-600 focus:ring-0">
+                    <span class="text-slate-300 font-semibold text-[11px]">All Uppercase</span>
+                  </label>
+                  <span class="text-[10px] text-slate-500">Updates live in preview above</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1479,6 +1644,66 @@
         badgeClass: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10',
         html: '<span class="text-white text-lg sm:text-xl font-black italic tracking-wide uppercase" style="-webkit-text-stroke: 2px black;">ENTIRE THING</span>'
       },
+      iman_gadzhi: {
+        badge: '👑 Iman Gadzhi (Couture Gold)',
+        badgeClass: 'text-amber-300 border-amber-500/40 bg-amber-500/10',
+        html: '<span class="text-amber-300 text-lg font-bold tracking-wide" style="font-family: Georgia, serif; text-shadow: 0 2px 8px rgba(0,0,0,0.9);">LUXURY</span> <span class="text-white font-bold tracking-wide" style="font-family: Georgia, serif; text-shadow: 0 2px 8px rgba(0,0,0,0.9);">EXECUTION</span>'
+      },
+      joe_rogan: {
+        badge: '🎙️ Joe Rogan (Podcast Dark)',
+        badgeClass: 'text-red-400 border-red-600/40 bg-red-500/10',
+        html: '<span class="bg-black/90 px-2 py-0.5 rounded text-white font-black tracking-wide border border-white/20"><span class="text-red-500">THAT IS</span> CRAZY MAN</span>'
+      },
+      ali_abdaal: {
+        badge: '📚 Ali Abdaal (Notion Minimal)',
+        badgeClass: 'text-sky-300 border-sky-500/30 bg-sky-500/10',
+        html: '<span class="text-sky-300 font-bold tracking-wide">Evidence-based</span> <span class="text-white font-semibold tracking-wide">productivity system</span>'
+      },
+      vox_explainer: {
+        badge: '📰 Vox Explainer (Editorial Yellow)',
+        badgeClass: 'text-yellow-300 border-yellow-500/40 bg-yellow-500/15',
+        html: '<span class="text-yellow-300 text-lg font-black tracking-wide" style="-webkit-text-stroke: 1.5px black;">HERE IS HOW</span> <span class="text-white font-black tracking-wide" style="-webkit-text-stroke: 1.5px black;">IT HAPPENED</span>'
+      },
+      andrew_huberman: {
+        badge: '🧠 Huberman (Neuroscience Teal)',
+        badgeClass: 'text-teal-300 border-teal-500/30 bg-teal-500/10',
+        html: '<span class="text-teal-300 font-bold tracking-wide">Dopamine baseline</span> <span class="text-slate-100 font-medium tracking-wide">and neuroplasticity</span>'
+      },
+      david_goggins: {
+        badge: '🔥 Goggins Savage (Uncut Hardcore)',
+        badgeClass: 'text-orange-400 border-orange-500/40 bg-orange-500/15',
+        html: '<span class="text-orange-500 text-xl font-black uppercase tracking-wider" style="-webkit-text-stroke: 2px black;">STAY HARD</span> <span class="text-white text-lg font-black uppercase tracking-wide" style="-webkit-text-stroke: 2px black;">MOTHERF***ER</span>'
+      },
+      luke_belmar: {
+        badge: '⚡ Luke Belmar (Data Matrix)',
+        badgeClass: 'text-lime-400 border-lime-500/40 bg-lime-500/10',
+        html: '<span class="text-lime-400 text-lg font-black tracking-wide font-mono" style="-webkit-text-stroke: 1.5px black;">GLITCH IN</span> <span class="text-white font-black tracking-wide font-mono" style="-webkit-text-stroke: 1.5px black;">THE MATRIX</span>'
+      },
+      diary_of_a_ceo: {
+        badge: '💼 Diary of a CEO (Bartlett Clean)',
+        badgeClass: 'text-amber-200 border-stone-600/30 bg-stone-700/20',
+        html: '<span class="text-amber-200 font-bold tracking-wide">The brutal question</span> <span class="text-white font-medium tracking-wide">nobody dares ask</span>'
+      },
+      fintech_pro: {
+        badge: '📈 Fintech Pro (Wall Street Green)',
+        badgeClass: 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10',
+        html: '<span class="bg-emerald-950/80 px-2 py-0.5 rounded text-white font-bold tracking-wide border border-emerald-500/30"><span class="text-emerald-400 font-mono">+420%</span> CASH FLOW</span>'
+      },
+      anime_shonen: {
+        badge: '⚔️ Anime Shonen (Power Burst)',
+        badgeClass: 'text-pink-400 border-pink-500/40 bg-pink-500/15',
+        html: '<span class="text-amber-400 text-xl font-black italic uppercase tracking-wider" style="-webkit-text-stroke: 2px black; text-shadow: 0 0 12px rgba(255,140,0,0.8);">FINAL FORM</span> <span class="text-white text-lg font-black italic uppercase" style="-webkit-text-stroke: 2px black;">UNLEASHED</span>'
+      },
+      retro_vhs: {
+        badge: '📼 Retro VHS (Synthwave 80s)',
+        badgeClass: 'text-fuchsia-300 border-fuchsia-500/40 bg-fuchsia-500/15',
+        html: '<span class="text-cyan-300 text-lg font-black uppercase tracking-wider" style="-webkit-text-stroke: 1.5px #500050; text-shadow: 2px 2px #ff00ff;">NEON NIGHTS</span> <span class="text-fuchsia-400 text-lg font-black uppercase" style="-webkit-text-stroke: 1.5px #100020; text-shadow: -2px -2px #00ffff;">1984</span>'
+      },
+      streetwear_hype: {
+        badge: '👟 Streetwear Hype (Brutalist)',
+        badgeClass: 'text-yellow-300 border-zinc-600/40 bg-zinc-800/40',
+        html: '<span class="text-yellow-400 text-xl font-black uppercase tracking-tighter" style="-webkit-text-stroke: 2px black;">"OFF-GRID"</span> <span class="text-white text-lg font-black uppercase tracking-tighter" style="-webkit-text-stroke: 2px black;">COLLECTION</span>'
+      },
       none: {
         badge: '🚫 No Subtitles (Raw 9:16)',
         badgeClass: 'text-slate-400 border-slate-600/30 bg-slate-700/20',
@@ -1820,13 +2045,186 @@
     }
 
     // --- CLIPPER FORM LOGIC ---
+    let isCustomStyleActive = false;
+    let activeCustomStyle = null;
+
+    function filterSubtitleCategory(cat) {
+      document.querySelectorAll('.style-cat-pill').forEach(pill => {
+        if (pill.getAttribute('data-cat') === cat) {
+          pill.className = 'style-cat-pill px-2.5 py-0.5 rounded-full border text-[11px] font-semibold bg-indigo-600/30 border-indigo-500/50 text-white';
+        } else {
+          pill.className = 'style-cat-pill px-2.5 py-0.5 rounded-full border text-[11px] font-semibold bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white';
+        }
+      });
+
+      document.querySelectorAll('.style-btn').forEach(btn => {
+        const btnCat = btn.getAttribute('data-category');
+        if (cat === 'all' || btnCat === cat) {
+          btn.classList.remove('hidden');
+        } else {
+          btn.classList.add('hidden');
+        }
+      });
+    }
+
+    function toggleSubtitleCustomizer() {
+      const drawer = document.getElementById('subtitleCustomizerDrawer');
+      if (!drawer) return;
+      if (drawer.classList.contains('hidden')) {
+        drawer.classList.remove('hidden');
+        populateCustomizerFromCurrentPreset();
+      } else {
+        drawer.classList.add('hidden');
+      }
+    }
+
+    function syncHexToColor(colorInputId, hexVal) {
+      if (/^#[0-9A-Fa-f]{6}$/.test(hexVal.trim())) {
+        const picker = document.getElementById(colorInputId);
+        if (picker) {
+          picker.value = hexVal.trim();
+          onCustomStyleParamChanged();
+        }
+      }
+    }
+
+    function populateCustomizerFromCurrentPreset() {
+      const p = STYLE_PREVIEWS[selectedStyle] || STYLE_PREVIEWS['wild_den'];
+      const fontSelect = document.getElementById('customFont');
+      const sizeInput = document.getElementById('customFontSize');
+      const sizeVal = document.getElementById('customFontSizeVal');
+      const primInput = document.getElementById('customPrimaryColor');
+      const primHex = document.getElementById('customPrimaryColorHex');
+      const highInput = document.getElementById('customHighlightColor');
+      const highHex = document.getElementById('customHighlightColorHex');
+      const outlineInput = document.getElementById('customOutline');
+      const outlineVal = document.getElementById('customOutlineVal');
+      const posSelect = document.getElementById('customPosition');
+      const upperCheck = document.getElementById('customUppercase');
+
+      if (['cinematic_auteur', 'iman_gadzhi'].includes(selectedStyle)) {
+        if (fontSelect) fontSelect.value = 'Georgia';
+      } else if (['bold_pop', 'beast', 'kinetic_pop', 'wild_den', 'neon_green', 'red_punch', 'david_goggins', 'streetwear_hype'].includes(selectedStyle)) {
+        if (fontSelect) fontSelect.value = 'Impact';
+      } else {
+        if (fontSelect) fontSelect.value = 'Arial';
+      }
+
+      if (sizeInput && sizeVal) {
+        sizeInput.value = ['david_goggins', 'wild_den'].includes(selectedStyle) ? 64 : 58;
+        sizeVal.innerText = sizeInput.value + 'px';
+      }
+
+      if (selectedStyle === 'beast' || selectedStyle === 'hormozi' || selectedStyle === 'bold_pop') {
+        if (highInput) highInput.value = '#FFE600';
+        if (highHex) highHex.value = '#FFE600';
+      } else if (selectedStyle === 'neon_green' || selectedStyle === 'luke_belmar') {
+        if (highInput) highInput.value = '#39FF14';
+        if (highHex) highHex.value = '#39FF14';
+      } else if (selectedStyle === 'red_punch' || selectedStyle === 'joe_rogan') {
+        if (highInput) highInput.value = '#FF3B30';
+        if (highHex) highHex.value = '#FF3B30';
+      } else if (selectedStyle === 'ali_abdaal') {
+        if (highInput) highInput.value = '#38BDF8';
+        if (highHex) highHex.value = '#38BDF8';
+      } else if (selectedStyle === 'iman_gadzhi') {
+        if (highInput) highInput.value = '#FFD700';
+        if (highHex) highHex.value = '#FFD700';
+      }
+
+      if (posSelect) {
+        posSelect.value = (selectedStyle === 'wild_den') ? '960' : '420';
+      }
+      if (upperCheck) {
+        upperCheck.checked = !['minimal_caption', 'netflix_standard', 'bbc_sdh', 'ali_abdaal', 'andrew_huberman'].includes(selectedStyle);
+      }
+      isCustomStyleActive = false;
+      const dot = document.getElementById('customActiveDot');
+      if (dot) dot.classList.add('hidden');
+      const status = document.getElementById('customStudioStatus');
+      if (status) {
+        status.innerText = 'Preset Linked';
+        status.className = 'text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono';
+      }
+    }
+
+    function resetCustomizerToPreset() {
+      populateCustomizerFromCurrentPreset();
+      setSubtitleStyle(selectedStyle);
+      showToast('Reset customizer to ' + (STYLE_PREVIEWS[selectedStyle]?.badge || 'preset') + ' defaults');
+    }
+
+    function onCustomStyleParamChanged() {
+      const font = document.getElementById('customFont')?.value || 'Arial';
+      const size = parseInt(document.getElementById('customFontSize')?.value || '58', 10);
+      const prim = document.getElementById('customPrimaryColor')?.value || '#FFFFFF';
+      const high = document.getElementById('customHighlightColor')?.value || '#FFE600';
+      const outline = parseFloat(document.getElementById('customOutline')?.value || '6');
+      const pos = parseInt(document.getElementById('customPosition')?.value || '420', 10);
+      const mode = document.getElementById('customAnimMode')?.value || 'pop';
+      const uppercase = Boolean(document.getElementById('customUppercase')?.checked);
+
+      document.getElementById('customFontSizeVal').innerText = size + 'px';
+      document.getElementById('customOutlineVal').innerText = outline + 'px';
+      document.getElementById('customPrimaryColorHex').value = prim.toUpperCase();
+      document.getElementById('customHighlightColorHex').value = high.toUpperCase();
+
+      isCustomStyleActive = true;
+      activeCustomStyle = {
+        font: font,
+        size: size,
+        primary_color: prim,
+        highlight_color: high,
+        outline: outline,
+        margin_v: pos,
+        uppercase: uppercase,
+        pop_scale: (mode === 'pop'),
+        karaoke_mode: (mode === 'karaoke'),
+        alignment: 2
+      };
+
+      const dot = document.getElementById('customActiveDot');
+      if (dot) dot.classList.remove('hidden');
+      const status = document.getElementById('customStudioStatus');
+      if (status) {
+        status.innerText = 'Custom Studio Active ✨';
+        status.className = 'text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-mono font-bold';
+      }
+
+      // Live update sample preview
+      const previewText = document.getElementById('previewSampleText');
+      if (previewText) {
+        const t1 = uppercase ? 'NEVER' : 'Never';
+        const t2 = uppercase ? 'GIVE UP' : 'give up';
+        previewText.style.fontFamily = font;
+        previewText.innerHTML = `
+          <span style="color: ${high}; font-size: ${Math.min(26, size * 0.42)}px; -webkit-text-stroke: ${Math.min(2.5, outline * 0.3)}px black; font-weight: 900; font-style: ${font === 'Georgia' ? 'italic' : 'normal'};">${t1}</span>
+          <span style="color: ${prim}; font-size: ${Math.min(24, size * 0.38)}px; -webkit-text-stroke: ${Math.min(2.5, outline * 0.3)}px black; font-weight: 900; font-style: ${font === 'Georgia' ? 'italic' : 'normal'};">${t2}</span>
+        `;
+      }
+    }
+
     function setSubtitleStyle(key) {
       selectedStyle = key;
-      const p = STYLE_PREVIEWS[key] || STYLE_PREVIEWS['hormozi'];
+      const p = STYLE_PREVIEWS[key] || STYLE_PREVIEWS['wild_den'];
       const badge = document.getElementById('stylePreviewBadge');
-      badge.innerText = p.badge;
-      badge.className = `text-[11px] font-bold px-2 py-0.5 rounded border ${p.badgeClass}`;
-      document.getElementById('previewSampleText').innerHTML = p.html;
+      if (badge) {
+        badge.innerText = p.badge;
+        badge.className = `text-[11px] font-bold px-2 py-0.5 rounded border ${p.badgeClass}`;
+      }
+      isCustomStyleActive = false;
+      const dot = document.getElementById('customActiveDot');
+      if (dot) dot.classList.add('hidden');
+      const status = document.getElementById('customStudioStatus');
+      if (status) {
+        status.innerText = 'Preset Linked';
+        status.className = 'text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono';
+      }
+      const previewSample = document.getElementById('previewSampleText');
+      if (previewSample) {
+        previewSample.style.fontFamily = '';
+        previewSample.innerHTML = p.html;
+      }
 
       document.querySelectorAll('.style-btn').forEach(btn => {
         if (btn.getAttribute('data-style') === key) {
@@ -2062,7 +2460,8 @@
             enable_slow_zoom: enableSlowZoom,
             enable_bg_music: enableBgMusic,
             time_range_start: document.getElementById('timeRangeStart') ? document.getElementById('timeRangeStart').value.trim() || null : null,
-            time_range_end: document.getElementById('timeRangeEnd') ? document.getElementById('timeRangeEnd').value.trim() || null : null
+            time_range_end: document.getElementById('timeRangeEnd') ? document.getElementById('timeRangeEnd').value.trim() || null : null,
+            custom_subtitle_style: isCustomStyleActive ? activeCustomStyle : null
           })
         });
         const data = await res.json();

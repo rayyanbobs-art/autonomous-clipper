@@ -248,7 +248,8 @@ def upload_video_to_youtube(
     description: str,
     tags: List[str],
     privacy_status: str = "public",
-    category_id: str = "22"
+    category_id: str = "22",
+    publish_at: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Performs standard resumable upload of vertical MP4 video to YouTube Data API v3.
@@ -277,6 +278,16 @@ def upload_video_to_youtube(
         clean_title = title[:100] if len(title) > 100 else title
         clean_tags = [t.lstrip("#") for t in tags][:15]
 
+        # When publishAt is scheduled, YouTube requires privacyStatus to be 'private'
+        actual_privacy = "private" if publish_at else privacy_status
+
+        status_body: Dict[str, Any] = {
+            "privacyStatus": actual_privacy,
+            "selfDeclaredMadeForKids": False
+        }
+        if publish_at:
+            status_body["publishAt"] = publish_at
+
         body = {
             "snippet": {
                 "title": clean_title,
@@ -284,10 +295,7 @@ def upload_video_to_youtube(
                 "tags": clean_tags,
                 "categoryId": category_id
             },
-            "status": {
-                "privacyStatus": privacy_status,
-                "selfDeclaredMadeForKids": False
-            }
+            "status": status_body
         }
 
         media = MediaFileUpload(str(video_path), mimetype="video/mp4", resumable=True, chunksize=1024*1024*4)
@@ -427,7 +435,8 @@ def upload_clip_to_platforms(
     description: str,
     hashtags: List[str],
     platforms: List[str],
-    privacy_status: str = "public"
+    privacy_status: str = "public",
+    publish_at: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Coordinates simultaneous or targeted upload across YouTube, TikTok, and Instagram,
@@ -445,7 +454,7 @@ def upload_clip_to_platforms(
     if "youtube" in platforms:
         if cfg.get("youtube", {}).get("is_authenticated", False):
             # Direct Native YouTube Data API v3
-            yt_res = upload_video_to_youtube(video_path, title, description, hashtags, privacy_status=privacy_status)
+            yt_res = upload_video_to_youtube(video_path, title, description, hashtags, privacy_status=privacy_status, publish_at=publish_at)
             results["youtube"] = yt_res
         elif cfg.get("ayrshare", {}).get("is_configured", False) and str(cfg.get("ayrshare", {}).get("api_key", "") or "").strip():
             # Route YouTube through Ayrshare if native credentials not configured.

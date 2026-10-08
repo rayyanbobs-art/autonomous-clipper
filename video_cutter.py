@@ -342,6 +342,7 @@ def cut_and_format_clip(
     enable_slow_zoom: bool = True,
     enable_bg_music: bool = False,
     bg_music_volume: float = 0.12,
+    custom_subtitle_style: Optional[Dict] = None,
 ) -> bool:
     """
     Downloads the precise timestamp slice using yt-dlp, applies snappy silence jump-cuts,
@@ -455,7 +456,8 @@ def cut_and_format_clip(
             style_key=subtitle_style,
             enable_emojis=enable_emojis,
             enable_auto_bleep=enable_auto_bleep,
-            words_out=words
+            words_out=words,
+            custom_style=custom_subtitle_style
         )
 
     bleep_intervals: List[Tuple[float, float]] = []
@@ -579,6 +581,21 @@ def cut_and_format_clip(
         )
         filter_parts.append(focal_filter)
         current_top = "v_focal"
+
+    # Multi-person group & wide safe-zone composite (pull-back zoom-out):
+    # When multiple people (2, 3, 4+ guys) or wide challenge text/outros are present,
+    # pull back to reveal the full 16:9 frame centered with a smooth blurred background fill.
+    wide_intervals = continuity_meta.get("wide_fit_intervals", []) if continuity_meta else []
+    if wide_intervals and framing_mode == "smart_face":
+        wide_cond = "+".join([f"between(t,{s:.2f},{e:.2f})" for s, e in wide_intervals])
+        wide_filter = (
+            f"[0:v]fps=30,scale=270:480:force_original_aspect_ratio=increase,crop=270:480,boxblur=10:3,scale={TARGET_WIDTH}:{TARGET_HEIGHT}[wide_bg];"
+            f"[0:v]fps=30,scale={TARGET_WIDTH}:-2,setsar=1[wide_fg];"
+            f"[wide_bg][wide_fg]overlay=0:(H-h)/2[wide_comp];"
+            f"[{current_top}][wide_comp]overlay=0:0:enable='{wide_cond}':eof_action=pass[v_wide]"
+        )
+        filter_parts.append(wide_filter)
+        current_top = "v_wide"
 
     # Overlay B-Roll items
     for idx, b_item in enumerate(broll_items):

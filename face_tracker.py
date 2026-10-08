@@ -68,6 +68,27 @@ def detect_scene_cuts(cap: cv2.VideoCapture, fps: float, total_frames: int, dura
     cuts.append(round(duration, 2))
     return cuts
 
+def detect_wide_text_or_graphics(frame_gray: np.ndarray) -> bool:
+    """
+    Detects prominent wide text, challenge scoreboards, or graphic banners
+    spanning horizontally across more than 58% of the frame.
+    """
+    try:
+        h, w = frame_gray.shape[:2]
+        sobel_x = cv2.Sobel(frame_gray, cv2.CV_16S, 1, 0, ksize=3)
+        sobel_abs = cv2.convertScaleAbs(sobel_x)
+        _, thresh = cv2.threshold(sobel_abs, 45, 255, cv2.THRESH_BINARY)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 3))
+        connected = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+        contours, _ = cv2.findContours(connected, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for cnt in contours:
+            bx, by, bw, bh = cv2.boundingRect(cnt)
+            if bw > (w * 0.58) and 14 < bh < (h * 0.45):
+                return True
+    except Exception:
+        pass
+    return False
+
 def compute_smart_crop_offset(video_path: Path, target_w: int = 1080, target_h: int = 1920) -> Tuple[int, int, str, int]:
     """
     Analyzes video using YuNet face tracking with per-scene shot boundary detection.
@@ -153,6 +174,7 @@ def compute_smart_crop_offset(video_path: Path, target_w: int = 1080, target_h: 
 
         # Step 2: Analyze speaker face position within each scene
         scene_crops = []
+        wide_fit_intervals = []
         last_known_x = default_x
         has_seen_face = False
         all_face_cys = []
@@ -167,6 +189,10 @@ def compute_smart_crop_offset(video_path: Path, target_w: int = 1080, target_h: 
             sample_times = np.linspace(t_start + 0.05, max(t_start + 0.1, t_end - 0.05), num=num_samples)
             
             faces_in_scene = []
+            frame_face_counts = []
+            frame_face_spans = []
+            wide_text_detected_in_scene = False
+
             # Motion salience (fallback when no face is visible: hoods, beanies, looking down)
             motion_cols = None
             motion_pairs = 0
@@ -191,6 +217,8 @@ def compute_smart_crop_offset(video_path: Path, target_w: int = 1080, target_h: 
                     _, faces = detector.detect(small_frame)
                 except Exception:
                     continue
+
+                frame_faces = []
                 if faces is not None and len(faces) > 0:
                     inv_s = 1.0 / scale_ratio
                     for f in faces:
@@ -199,6 +227,15 @@ def compute_smart_crop_offset(video_path: Path, target_w: int = 1080, target_h: 
                         conf = f[-1]
                         if conf >= 0.35:
                             faces_in_scene.append((area, fx, fy, fw, fh))
+                            frame_faces.append((area, fx, fy, fw, fh))
+                if frame_faces:
+                    frame_face_counts.append(len(frame_faces))
+                    if len(frame_faces) >= 2:
+                        span = max(f[1] + f[3] for f in frame_faces) - min(f[1] for f in frame_faces)
+                        frame_face_spans.append(span)
+
+                if detect_wide_text_or_graphics(gray):
+                    wide_text_detected_in_scene = True
                             
             if faces_in_scene:
                 # Sort by face area descending (largest face = active speaker in foreground)
@@ -285,6 +322,19 @@ def compute_smart_crop_offset(video_path: Path, target_w: int = 1080, target_h: 
                 target_x = max(0, min(orig_w - crop_w, target_x))
                 scene_crops.append((t_start, t_end, target_x, False, 0.0))
 
+            # Multi-person group detection: 3+ people or 2+ people spanning wider than 9:16 crop window
+            is_wide_group = False
+            if frame_face_counts and max(frame_face_counts) >= 3:
+                is_wide_group = True
+            elif frame_face_spans and max(frame_face_spans) > (crop_w * 0.88):
+                is_wide_group = True
+
+            # Outro card / end-screen detection in the final 4.5 seconds of the clip
+            is_outro_scene = (t_end >= (duration - 4.5) and duration > 6.0 and (wide_text_detected_in_scene or not faces_in_scene))
+
+            if is_wide_group or wide_text_detected_in_scene or is_outro_scene:
+                wide_fit_intervals.append((round(float(t_start), 2), round(float(t_end), 2)))
+
         if not scene_crops:
             return (crop_w, crop_h, str(default_x), crop_y)
 
@@ -340,7 +390,7 @@ def compute_smart_crop_offset(video_path: Path, target_w: int = 1080, target_h: 
         if len(merged) == 1:
             single_x = merged[0][2]
             print(f"  [Face Tracker] Static framing across video -> crop_x: {single_x}")
-            _save_shot_continuity(video_path, merged, focal_scale_intervals, crop_w, crop_y)
+            _save_shot_continuity(video_path, merged, focal_scale_intervals, crop_w, crop_y, wide_fit_intervals)
             return (crop_w, crop_h, str(single_x), crop_y)
 
         dynamic_expr = str(merged[-1][2])
@@ -364,7 +414,7 @@ def compute_smart_crop_offset(video_path: Path, target_w: int = 1080, target_h: 
                 dynamic_expr = f"if(lt(t,{t_cut:.2f}),{x_curr},{dynamic_expr})"
 
         print(f"  [Face Tracker] Generated dynamic eye-trace smoothed crop expression across {len(merged)} shot segments (range: 0..{orig_w - crop_w}).")
-        _save_shot_continuity(video_path, merged, focal_scale_intervals, crop_w, crop_y)
+        _save_shot_continuity(video_path, merged, focal_scale_intervals, crop_w, crop_y, wide_fit_intervals)
         return (crop_w, crop_h, dynamic_expr, crop_y)
     finally:
         cap.release()
@@ -374,7 +424,8 @@ def _save_shot_continuity(
     merged_segments: list,
     focal_scale_intervals: list,
     crop_w: int,
-    crop_y: int
+    crop_y: int,
+    wide_fit_intervals: Optional[list] = None
 ) -> None:
     global _GLOBAL_CONTINUITY_METADATA
     cuts = []
@@ -408,13 +459,14 @@ def _save_shot_continuity(
     key = str(video_path.resolve()) if video_path else "default"
     _GLOBAL_CONTINUITY_METADATA[key] = {
         "cuts": cuts,
-        "focal_scale_intervals": focal_scale_intervals
+        "focal_scale_intervals": focal_scale_intervals,
+        "wide_fit_intervals": wide_fit_intervals or []
     }
     _GLOBAL_CONTINUITY_METADATA["last"] = _GLOBAL_CONTINUITY_METADATA[key]
 
 def get_shot_continuity_metadata(video_path: Optional[Path] = None) -> Dict[str, Any]:
     global _GLOBAL_CONTINUITY_METADATA
-    empty = {"cuts": [], "focal_scale_intervals": []}
+    empty = {"cuts": [], "focal_scale_intervals": [], "wide_fit_intervals": []}
     if video_path:
         # Never hand back ANOTHER video's shots: its focal intervals would become
         # mid-shot 1.15x jump zooms on this clip.

@@ -78,3 +78,8 @@ desktop.ini
 # HyperFrames Studio Workspace
 hyperframes_studio/
 
+# Operational Logs & Channel Registry
+logs/
+processed_channel_videos.json
+
+

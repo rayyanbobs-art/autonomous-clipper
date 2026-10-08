@@ -84,5 +84,62 @@ class TestHyperframesStudio(unittest.TestCase):
         self.assertEqual(WORKSPACE_DIR.parent, BASE_DIR)
         self.assertEqual(WORKSPACE_DIR.name, "hyperframes_studio")
 
+    def test_05_cli_cmd_non_interactive_flags(self):
+        """Verify get_hyperframes_cli_cmd returns non-interactive flags (--yes or bunx)."""
+        cmd = hyperframes_editor.get_hyperframes_cli_cmd()
+        self.assertIsInstance(cmd, list)
+        self.assertGreater(len(cmd), 0)
+        # If npx is used, must include --yes
+        if "npx" in cmd[0]:
+            self.assertIn("--yes", cmd)
+
+    def test_06_run_hyperframes_command_devnull_stdin(self):
+        """Verify run_hyperframes_command invokes subprocess with stdin=DEVNULL to prevent hangs."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="Hyperframes rendered", stderr="")
+            res = hyperframes_editor.run_hyperframes_command(["--version"])
+            self.assertEqual(res.returncode, 0)
+            mock_run.assert_called_once()
+            _, kwargs = mock_run.call_args
+            import subprocess
+            self.assertEqual(kwargs.get("stdin"), subprocess.DEVNULL)
+
+    def test_07_no_subtitle_blur_shield_in_html(self):
+        """Verify #subtitle-shield is omitted from composition to avoid obscuring footage with blur."""
+        html = generate_composition_html(
+            video_rel_path="base_vertical.mp4",
+            duration=5.0,
+            words=[{"word": "TEST", "start": 0.1, "end": 0.5}],
+            zooms=[],
+            badge_text="",
+            style_key="viral_pop"
+        )
+        self.assertNotIn("id=\"subtitle-shield\"", html)
+        self.assertNotIn("#subtitle-shield", html)
+
+    def test_08_detect_audio_spikes_spacing_and_cap(self):
+        """Verify detect_audio_spikes enforces min_spacing and caps max spikes."""
+        import numpy as np
+        # Synthetic loud samples with frequent bursts
+        fs = 16000
+        dur_sec = 20
+        total_samples = fs * dur_sec
+        audio = np.zeros(total_samples, dtype=np.int16)
+        # Create loud pulses every 2 seconds
+        for sec in range(1, dur_sec, 2):
+            audio[int(sec * fs) : int((sec + 0.3) * fs)] = 25000
+
+        fake_clip = Path(self.tmp_dir.name) / "audio_test.mp4"
+        fake_clip.write_bytes(b"dummy")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=audio.tobytes())
+            spikes = hyperframes_editor.detect_audio_spikes(fake_clip, min_spacing=7.0, max_spikes=3)
+            # Must be capped at max_spikes
+            self.assertLessEqual(len(spikes), 3)
+            # Must be spaced by at least 7.0 seconds
+            for i in range(1, len(spikes)):
+                self.assertGreaterEqual(spikes[i][0] - spikes[i-1][0], 7.0)
+
 if __name__ == "__main__":
     unittest.main()
