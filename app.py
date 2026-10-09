@@ -55,10 +55,38 @@ JOB_MAX_ENTRIES = 200
 # In-memory YouTube OAuth handshake tracker (request id -> status/result)
 AUTH_JOBS = {}
 
+_MAX_ACTIVE_WORKERS = 2
+_WORKER_SEMAPHORE = threading.Semaphore(_MAX_ACTIVE_WORKERS)
+JOB_TIMEOUT_SECONDS = 1200  # 20 minutes max runtime before watchdog marks failed
+
+def _cleanup_stale_temp_dirs() -> None:
+    """Removes orphan per-job sandbox directories from TEMP_DIR on boot."""
+    try:
+        if TEMP_DIR.exists():
+            for p in TEMP_DIR.glob("*"):
+                if p.is_dir() and len(p.name) == 8 and all(c in "0123456789abcdefABCDEF" for c in p.name):
+                    shutil.rmtree(p, ignore_errors=True)
+    except Exception as e:
+        print(f"[Temp Cleanup] Stale directory sweep notice: {e}", flush=True)
+
+_cleanup_stale_temp_dirs()
+
 
 def _prune_jobs(now: float = None) -> None:
-    """Evicts expired and overflow job entries. Safe to call from any thread."""
+    """Evicts expired and overflow job entries, and watchdog terminates stuck jobs exceeding 20m."""
     now = time.time() if now is None else now
+
+    # Watchdog: terminate jobs exceeding JOB_TIMEOUT_SECONDS
+    for job_id, j in list(JOBS.items()):
+        if j.get("status") == "running":
+            started = j.get("_started_at")
+            if isinstance(started, (int, float)) and (now - started) > JOB_TIMEOUT_SECONDS:
+                j["status"] = "failed"
+                j["error"] = "Job exceeded maximum 20-minute execution timeout."
+                j["step"] = f"Error: {j['error']}"
+                j["_finished_at"] = now
+                _save_jobs()
+
     for job_id in [
         jid for jid, j in JOBS.items()
         if isinstance(j.get("_finished_at"), (int, float)) and (now - j["_finished_at"]) > JOB_RETENTION_SECONDS
@@ -148,9 +176,15 @@ def run_clipping_job(
     time_range_end: Optional[Any] = None,
     custom_subtitle_style: Optional[Dict] = None
 ):
+    job_temp_dir = TEMP_DIR / job_id
+    job_temp_dir.mkdir(parents=True, exist_ok=True)
+    _WORKER_SEMAPHORE.acquire()
     try:
-        job = JOBS[job_id]
+        job = JOBS.get(job_id)
+        if not job:
+            return
         job["status"] = "running"
+        job["_started_at"] = time.time()
         job["progress"] = 5
         job["step"] = "Extracting video details..."
 
@@ -164,7 +198,10 @@ def run_clipping_job(
             transcript = get_local_transcript(Path(clean_url), video_id=video_id)
         else:
             job["step"] = "Fetching YouTube captions & transcript..."
-            transcript = get_transcript(video_id)
+            try:
+                transcript = get_transcript(video_id, temp_dir=job_temp_dir)
+            except TypeError:
+                transcript = get_transcript(video_id)
 
         if not transcript:
             raise RuntimeError("No captions or transcript found for this video. Please ensure the video has English captions or speech enabled.")
@@ -270,7 +307,8 @@ def run_clipping_job(
                 enable_slow_zoom=enable_slow_zoom,
                 enable_bg_music=enable_bg_music,
                 bg_music_volume=bg_music_volume,
-                custom_subtitle_style=custom_subtitle_style
+                custom_subtitle_style=custom_subtitle_style,
+                temp_dir=job_temp_dir
             )
 
             with completed_lock:
@@ -386,6 +424,13 @@ def run_clipping_job(
         job["step"] = f"Error: {str(e)}"
         job["_finished_at"] = time.time()
         _save_jobs()
+    finally:
+        _WORKER_SEMAPHORE.release()
+        try:
+            if job_temp_dir.exists():
+                shutil.rmtree(job_temp_dir, ignore_errors=True)
+        except Exception:
+            pass
 
 @app.route("/")
 def index():
@@ -553,12 +598,19 @@ def generate():
     if not url:
         return jsonify({"error": "Please provide a valid YouTube video URL or local video file path."}), 400
 
+    active_and_queued = sum(1 for j in JOBS.values() if j.get("status") in ("queued", "running"))
+    if active_and_queued >= 100:
+        return jsonify({"error": "Job queue is full (max 100). Please wait for active jobs to finish."}), 429
+
     job_id = str(uuid.uuid4())[:8]
+    queue_pos = max(1, active_and_queued - _MAX_ACTIVE_WORKERS + 1) if active_and_queued >= _MAX_ACTIVE_WORKERS else 1
+    step_msg = "Queued and starting up with Critique Gate..." if queue_pos == 1 else f"Queued (position {queue_pos}) waiting for worker..."
     JOBS[job_id] = {
         "job_id": job_id,
         "status": "queued",
         "progress": 0,
-        "step": "Queued and starting up with Critique Gate...",
+        "step": step_msg,
+        "queue_position": queue_pos,
         "clips": [],
         "error": None,
         "_created_at": time.time(),
@@ -579,7 +631,7 @@ def generate():
     )
     t.start()
 
-    return jsonify({"job_id": job_id, "status": "queued"})
+    return jsonify({"job_id": job_id, "status": "queued", "queue_position": queue_pos})
 
 @app.route("/api/status/<job_id>")
 def status(job_id):

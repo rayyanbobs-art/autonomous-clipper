@@ -4,6 +4,7 @@ import subprocess
 import shutil
 import uuid
 import sys
+import threading
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 import numpy as np
@@ -26,6 +27,7 @@ def get_ffmpeg_path() -> str:
             return str(f)
     raise RuntimeError("ffmpeg not found on system PATH.")
 
+_GPU_SEMAPHORE = threading.Semaphore(1)
 _BEST_ENCODER_INFO: Optional[Tuple[str, List[str]]] = None
 
 def get_best_video_encoder(ffmpeg_exe: str = "ffmpeg") -> Tuple[str, List[str]]:
@@ -42,10 +44,10 @@ def get_best_video_encoder(ffmpeg_exe: str = "ffmpeg") -> Tuple[str, List[str]]:
         return _BEST_ENCODER_INFO
 
     candidates = [
-        ("h264_nvenc", ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "19", "-pix_fmt", "yuv420p"]),
-        ("h264_amf", ["-c:v", "h264_amf", "-quality", "speed", "-rc", "cqp", "-qp_p", "19", "-qp_i", "19", "-pix_fmt", "yuv420p"]),
-        ("h264_qsv", ["-c:v", "h264_qsv", "-preset", "veryfast", "-global_quality", "19", "-pix_fmt", "yuv420p"]),
-        ("libx264", ["-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p"])
+        ("h264_nvenc", ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "19", "-pix_fmt", "yuv420p", "-threads", "4"]),
+        ("h264_amf", ["-c:v", "h264_amf", "-quality", "speed", "-rc", "cqp", "-qp_p", "19", "-qp_i", "19", "-pix_fmt", "yuv420p", "-threads", "4"]),
+        ("h264_qsv", ["-c:v", "h264_qsv", "-preset", "veryfast", "-global_quality", "19", "-pix_fmt", "yuv420p", "-threads", "4"]),
+        ("libx264", ["-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p", "-threads", "4"])
     ]
 
     for enc_name, flags in candidates:
@@ -65,7 +67,7 @@ def get_best_video_encoder(ffmpeg_exe: str = "ffmpeg") -> Tuple[str, List[str]]:
         except Exception:
             continue
 
-    _BEST_ENCODER_INFO = ("libx264", ["-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p"])
+    _BEST_ENCODER_INFO = ("libx264", ["-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p", "-threads", "4"])
     return _BEST_ENCODER_INFO
 
 def get_video_duration(video_path: Path, ffmpeg_exe: str = "ffmpeg") -> float:
@@ -343,6 +345,7 @@ def cut_and_format_clip(
     enable_bg_music: bool = False,
     bg_music_volume: float = 0.12,
     custom_subtitle_style: Optional[Dict] = None,
+    temp_dir: Optional[Path] = None,
 ) -> bool:
     """
     Downloads the precise timestamp slice using yt-dlp, applies snappy silence jump-cuts,
@@ -353,8 +356,10 @@ def cut_and_format_clip(
     """
     ffmpeg_exe = get_ffmpeg_path()
     clip_id = uuid.uuid4().hex[:8]
-    temp_clip_raw = TEMP_DIR / f"raw_{int(start_sec)}_{int(end_sec)}_{clip_id}.mp4"
-    temp_ass = TEMP_DIR / f"subs_{int(start_sec)}_{int(end_sec)}_{clip_id}.ass"
+    work_dir = Path(temp_dir) if temp_dir else TEMP_DIR
+    work_dir.mkdir(parents=True, exist_ok=True)
+    temp_clip_raw = work_dir / f"raw_{int(start_sec)}_{int(end_sec)}_{clip_id}.mp4"
+    temp_ass = work_dir / f"subs_{int(start_sec)}_{int(end_sec)}_{clip_id}.ass"
 
     if temp_clip_raw.exists():
         temp_clip_raw.unlink()
@@ -383,7 +388,10 @@ def cut_and_format_clip(
             "-c:a", "aac", "-b:a", "192k",
             str(temp_clip_raw)
         ]
-        proc = subprocess.run(slice_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        slice_kwargs = {"capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace"}
+        if sys.platform == "win32" and hasattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS"):
+            slice_kwargs["creationflags"] = subprocess.BELOW_NORMAL_PRIORITY_CLASS
+        proc = subprocess.run(slice_cmd, **slice_kwargs)
         if proc.returncode != 0:
             print(f"  [Local Video Error] {proc.stderr[-300:]}")
             return False
@@ -398,6 +406,8 @@ def cut_and_format_clip(
             sys.executable, "-m", "yt_dlp",
             "--ffmpeg-location", ffmpeg_dir,
             "--extractor-args", "youtube:player_client=all",
+            "--cookies-from-browser", "vivaldi",
+            "--js-runtimes", r"node:C:\Users\Saeed\AppData\Local\Programs\nodejs\node.exe",
             "--download-sections", download_section_arg,
             "-f", "bestvideo[height<=2160]+bestaudio/best",
             "--merge-output-format", "mp4",
@@ -420,17 +430,17 @@ def cut_and_format_clip(
             actual_downloaded = temp_clip_raw
         else:
             prefix = f"raw_{int(start_sec)}_{int(end_sec)}_{clip_id}"
-            for f in TEMP_DIR.glob(f"{prefix}*"):
+            for f in work_dir.glob(f"{prefix}*"):
                 actual_downloaded = f
                 break
 
     if not actual_downloaded or not actual_downloaded.exists():
-        print(f"  [Downloader Error] Downloaded file not found in {TEMP_DIR}")
+        print(f"  [Downloader Error] Downloaded file not found in {work_dir}")
         return False
 
     # Step 1.5: Snappy dead-air jump-cuts (IShowSpeed / high-retention pacing)
     if enable_snappy_cuts:
-        snappy_clip = TEMP_DIR / f"snappy_{int(start_sec)}_{int(end_sec)}_{clip_id}.mp4"
+        snappy_clip = work_dir / f"snappy_{int(start_sec)}_{int(end_sec)}_{clip_id}.mp4"
         try:
             if apply_snappy_silence_cuts(actual_downloaded, snappy_clip, min_silence_sec=0.28, silence_thresh_db=-28.0, ffmpeg_exe=ffmpeg_exe):
                 print(f"  [Jump-Cuts] Truncated dead-air pauses into snappy jump-cuts -> {snappy_clip.name}")
@@ -711,9 +721,9 @@ def cut_and_format_clip(
 
     filter_complex = ";".join(filter_parts)
 
-    temp_main_rendered = (TEMP_DIR / f"main_{int(start_sec)}_{int(end_sec)}_{clip_id}.mp4") if enable_outro else output_path
+    temp_main_rendered = (work_dir / f"main_{int(start_sec)}_{int(end_sec)}_{clip_id}.mp4") if enable_outro else output_path
 
-    _, enc_flags = get_best_video_encoder(ffmpeg_exe)
+    enc_name, enc_flags = get_best_video_encoder(ffmpeg_exe)
 
     ffmpeg_cmd = [
         ffmpeg_exe,
@@ -746,11 +756,20 @@ def cut_and_format_clip(
     ])
 
     print(f"  [FFmpeg] Rendering 9:16 Short (B-Rolls: {len(broll_items)}, Framing: {framing_mode}, Zooms: {len(spikes)}) -> {temp_main_rendered.name}...")
+    is_gpu = enc_name != "libx264"
+    if is_gpu:
+        _GPU_SEMAPHORE.acquire()
     try:
-        ff_proc = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
+        sub_kwargs = {"capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace", "timeout": 600}
+        if sys.platform == "win32" and hasattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS"):
+            sub_kwargs["creationflags"] = subprocess.BELOW_NORMAL_PRIORITY_CLASS
+        ff_proc = subprocess.run(ffmpeg_cmd, **sub_kwargs)
     except subprocess.TimeoutExpired as te:
         print(f"  [FFmpeg Error] Rendering timed out after 600s: {te}")
         return False
+    finally:
+        if is_gpu:
+            _GPU_SEMAPHORE.release()
 
     if temp_ass.exists():
         try:
@@ -769,7 +788,7 @@ def cut_and_format_clip(
 
     # Step 5: Append 1-second high-contrast SUBSCRIBE outro card
     if enable_outro and temp_main_rendered != output_path and temp_main_rendered.exists():
-        temp_outro = TEMP_DIR / f"outro_{clip_id}.mp4"
+        temp_outro = work_dir / f"outro_{clip_id}.mp4"
         outro_ok = generate_outro_card(temp_outro, duration_sec=1.0, width=TARGET_WIDTH, height=TARGET_HEIGHT, ffmpeg_exe=ffmpeg_exe)
         if outro_ok:
             has_main_audio = has_audio_stream(temp_main_rendered, ffmpeg_exe)
@@ -807,7 +826,10 @@ def cut_and_format_clip(
                 "-movflags", "+faststart",
                 str(output_path)
             ]
-            concat_proc = subprocess.run(concat_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            concat_kwargs = {"capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace"}
+            if sys.platform == "win32" and hasattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS"):
+                concat_kwargs["creationflags"] = subprocess.BELOW_NORMAL_PRIORITY_CLASS
+            concat_proc = subprocess.run(concat_cmd, **concat_kwargs)
             # Cleanup outro and main
             if temp_main_rendered.exists():
                 try:

@@ -12,6 +12,7 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import hashlib
+import subprocess
 from typing import Optional, Any
 from youtube_transcript_api import YouTubeTranscriptApi
 from config import (
@@ -93,13 +94,48 @@ def get_local_transcript(media_path: Path, video_id: Optional[str] = None) -> li
 
     return snippets
 
-def get_transcript(video_id: str):
-    """Fetches English or auto-generated transcript with yt-dlp fallback."""
-    res = get_video_transcript(video_id)
-    if not res or not res.get("available") or not res.get("snippets"):
-        err = (res.get("error") if res else None) or "No captions or transcript found for this video. Please ensure the video has English captions enabled."
-        raise RuntimeError(err)
-    return res.get("snippets", [])
+def get_transcript(video_id: str, temp_dir: Optional[Path] = None):
+    """Fetches English or auto-generated transcript with resilient yt-dlp audio download + Faster-Whisper fallback."""
+    try:
+        res = get_video_transcript(video_id)
+        if res and res.get("available") and res.get("snippets"):
+            return res.get("snippets", [])
+    except Exception as e:
+        print(f"  [Transcript API Warning] Caption fetch failed ({e}). Engaging audio fallback...", flush=True)
+
+    print(f"  [Resilient 429 Fallback] Captions blocked or unavailable for {video_id}. Downloading low-bitrate audio stream...", flush=True)
+    work_dir = Path(temp_dir) if temp_dir else TEMP_DIR
+    work_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = work_dir / f"audio_fallback_{video_id}.m4a"
+
+    ytdlp_cmd = [
+        sys.executable, "-m", "yt_dlp",
+        "--extractor-args", "youtube:player_client=all",
+        "--cookies-from-browser", "vivaldi",
+        "--js-runtimes", r"node:C:\Users\Saeed\AppData\Local\Programs\nodejs\node.exe",
+        "-f", "ba[ext=m4a]/140/ba/worstvideo+worstaudio",
+        "--no-playlist",
+        "-o", str(audio_path),
+        f"https://www.youtube.com/watch?v={video_id}"
+    ]
+    try:
+        sub_kwargs = {"capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace", "timeout": 180}
+        if sys.platform == "win32" and hasattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS"):
+            sub_kwargs["creationflags"] = subprocess.BELOW_NORMAL_PRIORITY_CLASS
+        proc = subprocess.run(ytdlp_cmd, **sub_kwargs)
+        if not audio_path.exists():
+            for f in work_dir.glob(f"audio_fallback_{video_id}*"):
+                audio_path = f
+                break
+        if audio_path.exists():
+            print(f"  [Resilient 429 Fallback] Audio downloaded ({audio_path.name}). Transcribing locally with Faster-Whisper...", flush=True)
+            snippets = get_local_transcript(audio_path, video_id=video_id)
+            if snippets:
+                return snippets
+    except Exception as ex:
+        print(f"  [Resilient 429 Fallback Error] Audio download/transcribe failed: {ex}", flush=True)
+
+    raise RuntimeError(f"No captions or transcript found for video '{video_id}'. YouTube captions and audio fallback both failed.")
 
 def process_video(
     youtube_url: str,

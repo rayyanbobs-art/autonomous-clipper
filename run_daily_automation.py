@@ -21,6 +21,10 @@ This script executes the complete daily automated workflow:
 """
 
 import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 import time
 import json
 import requests
@@ -99,58 +103,80 @@ def run():
     print(f"Selected Video: {video_title} ({video_url}) [Popularity Rank #{selected.get('rank_by_popularity')}]", flush=True)
 
     # Step 2: Configure and trigger Auto Clipper
-    print("\n--- [Step 2: Triggering Auto Clipper with Required Settings] ---", flush=True)
-    gen_payload = {
-        "url": video_url,
-        "top_k": 10,
-        "candidates": 20,
-        "subtitle_style": "none",
-        "framing_mode": "smart_face",
-        "enable_broll": False,
-        "enable_emojis": False,
-        "enable_slow_zoom": True,          # Slow-mo in and drift (Checked)
-        "enable_bg_music": False,          # Ambient adventure bed (Unchecked)
-        "enable_snappy_cuts": False,       # Unchecked
-        "enable_punch_zooms": False,       # Unchecked
-        "enable_outro": False,             # Unchecked
-        "enable_sponsor_killer": False,    # Unchecked
-        "enable_auto_bleep": False         # Unchecked
-    }
+    print("\n--- [Step 2: Checking / Triggering Auto Clipper with Required Settings] ---", flush=True)
+    existing_clips_res = requests.get(f"{API_BASE}/api/clips", timeout=60).json()
+    all_existing = existing_clips_res.get("clips", [])
+    matching_clips = [c for c in all_existing if c.get("video_id") == video_id or c.get("filename", "").startswith(video_id)]
 
-    res = requests.post(f"{API_BASE}/api/generate", json=gen_payload, timeout=30)
-    gen_data = res.json()
-    if not gen_data.get("success"):
-        raise RuntimeError(f"Auto Clipper failed to start: {gen_data.get('error')}")
+    if matching_clips:
+        print(f"[Auto Clipper] Found {len(matching_clips)} ready clips for {video_id}. Proceeding directly to selection!", flush=True)
+    else:
+        gen_payload = {
+            "url": video_url,
+            "top_k": 10,
+            "candidates": 20,
+            "subtitle_style": "none",
+            "framing_mode": "smart_face",
+            "enable_broll": False,
+            "enable_emojis": False,
+            "enable_slow_zoom": True,          # Slow-mo in and drift (Checked)
+            "enable_bg_music": False,          # Ambient adventure bed (Unchecked)
+            "enable_snappy_cuts": False,       # Unchecked
+            "enable_punch_zooms": False,       # Unchecked
+            "enable_outro": False,             # Unchecked
+            "enable_sponsor_killer": False,    # Unchecked
+            "enable_auto_bleep": False         # Unchecked
+        }
 
-    job_id = gen_data["job_id"]
-    print(f"Job started successfully with ID: {job_id}. Polling progress...", flush=True)
+        res = requests.post(f"{API_BASE}/api/generate", json=gen_payload, timeout=30)
+        gen_data = res.json()
+        if not gen_data.get("job_id"):
+            raise RuntimeError(f"Auto Clipper failed to start: {gen_data.get('error', res.text)}")
 
-    # Poll generation status
-    while True:
-        time.sleep(10)
-        status_res = requests.get(f"{API_BASE}/api/status/{job_id}", timeout=15).json()
-        job = status_res.get("job", {})
-        status = job.get("status")
-        progress = job.get("progress", 0)
-        step = job.get("step", "")
-        print(f"  [Progress {progress}%] {step}", flush=True)
+        job_id = gen_data["job_id"]
+        print(f"Job started successfully with ID: {job_id}. Polling progress...", flush=True)
 
-        if status == "completed":
-            print("[Auto Clipper] Clips generation complete!", flush=True)
-            break
-        elif status == "failed":
-            raise RuntimeError(f"Auto Clipper job failed: {job.get('error')}")
+        # Poll generation status
+        consecutive_errors = 0
+        while True:
+            time.sleep(10)
+            try:
+                res = requests.get(f"{API_BASE}/api/status/{job_id}", timeout=60)
+                if res.status_code == 404:
+                    raise RuntimeError(f"Auto Clipper job {job_id} expired or was not found on server.")
+                job = res.json()
+                consecutive_errors = 0
+            except requests.exceptions.RequestException as e:
+                consecutive_errors += 1
+                print(f"  [Auto Clipper Polling] Server busy encoding, retrying ({consecutive_errors}/10)...", flush=True)
+                if consecutive_errors > 10:
+                    raise RuntimeError(f"Server connection lost during clipping: {e}")
+                continue
 
-    # Step 3: Identify highest scoring clip
+            status = job.get("status")
+            progress = job.get("progress", 0)
+            step = job.get("step", "")
+            print(f"  [Progress {progress}%] {step}", flush=True)
+
+            if status == "completed":
+                print("[Auto Clipper] Clips generation complete!", flush=True)
+                break
+            elif status == "failed":
+                raise RuntimeError(f"Auto Clipper job failed: {job.get('error') or job.get('step')}")
+
+    # Step 3: Identify highest scoring clip for this video
     print("\n--- [Step 3: Selecting Top-Scoring Clip] ---", flush=True)
-    clips_res = requests.get(f"{API_BASE}/api/clips", timeout=15).json()
+    clips_res = requests.get(f"{API_BASE}/api/clips", timeout=60).json()
     all_clips = clips_res.get("clips", [])
     if not all_clips:
         raise RuntimeError("No clips found in output.")
 
-    # Sort by virality_score and rubric_average
+    # Prioritize clips produced from this specific video
+    matching_clips = [c for c in all_clips if c.get("video_id") == video_id or c.get("filename", "").startswith(video_id)]
+    target_pool = matching_clips if matching_clips else all_clips
+
     sorted_clips = sorted(
-        all_clips,
+        target_pool,
         key=lambda c: (c.get("virality_score", 0), c.get("rubric_average", 0)),
         reverse=True
     )
@@ -173,17 +199,27 @@ def run():
         "zoom": "dynamic"          # Recommended camera punch & zoom dynamics
     }
 
-    hf_render_res = requests.post(f"{API_BASE}/api/hyperframes/render", json=hf_payload, timeout=30).json()
+    hf_render_res = requests.post(f"{API_BASE}/api/hyperframes/render", json=hf_payload, timeout=60).json()
     if not hf_render_res.get("success"):
         raise RuntimeError(f"Hyperframes render failed to initiate: {hf_render_res.get('error')}")
 
     hf_job_id = hf_render_res["job_id"]
     print(f"Hyperframes render started (Job: {hf_job_id}). Waiting for master 1080x1920 MP4...", flush=True)
 
+    hf_errors = 0
     while True:
         time.sleep(10)
-        hf_status_res = requests.get(f"{API_BASE}/api/hyperframes/status/{hf_job_id}", timeout=15).json()
-        hf_job = hf_status_res.get("job", {})
+        try:
+            hf_status_res = requests.get(f"{API_BASE}/api/hyperframes/status/{hf_job_id}", timeout=60).json()
+            hf_job = hf_status_res.get("job", {})
+            hf_errors = 0
+        except requests.exceptions.RequestException as e:
+            hf_errors += 1
+            print(f"  [Hyperframes Polling] Server busy rendering, retrying ({hf_errors}/10)...", flush=True)
+            if hf_errors > 10:
+                raise RuntimeError(f"Server connection lost during Hyperframes rendering: {e}")
+            continue
+
         hf_status = hf_job.get("status")
         hf_progress = hf_job.get("progress", 0)
         hf_step = hf_job.get("step", "")
