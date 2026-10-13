@@ -7,6 +7,12 @@ import shutil
 import threading
 import subprocess
 from pathlib import Path
+
+# Ensure application root directory is always at head of sys.path
+_APP_ROOT = str(Path(__file__).resolve().parent)
+if _APP_ROOT not in sys.path:
+    sys.path.insert(0, _APP_ROOT)
+
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
 from typing import Optional, Any
@@ -57,7 +63,7 @@ AUTH_JOBS = {}
 
 _MAX_ACTIVE_WORKERS = 2
 _WORKER_SEMAPHORE = threading.Semaphore(_MAX_ACTIVE_WORKERS)
-JOB_TIMEOUT_SECONDS = 1200  # 20 minutes max runtime before watchdog marks failed
+JOB_TIMEOUT_SECONDS = 7200  # 2 hours max runtime before watchdog marks failed
 
 def _cleanup_stale_temp_dirs() -> None:
     """Removes orphan per-job sandbox directories from TEMP_DIR on boot."""
